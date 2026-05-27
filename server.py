@@ -12,6 +12,7 @@ Tools exposed:
 import re
 import httpx
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 # ---------------------------------------------------------------------------
 # MCP app
@@ -23,6 +24,11 @@ mcp = FastMCP(
         "Use this server to look up Swedish restaurant lunch menus. "
         "Call list_cities first to get valid city slugs, then get_lunch_guide for today's "
         "menus in a city, or get_restaurant_menu for a specific restaurant's full week."
+    ),
+    # DNS-rebinding protection is disabled here because we sit behind
+    # Railway's TLS-terminating proxy, which already enforces origin security.
+    transport_security=TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
     ),
 )
 
@@ -348,25 +354,5 @@ if __name__ == "__main__":
         mcp.run(transport="stdio")
     else:
         # HTTP server — default, used on Railway and any other hosted environment
-        import uvicorn
-
         port = int(os.environ.get("PORT", "8000"))
-
-        # FastMCP's transport-security layer rejects requests whose Host header
-        # doesn't match a known safe value (anti-DNS-rebinding protection).
-        # Behind Railway's proxy the Host header is the public domain, so we
-        # normalise it to "localhost" before the request reaches FastMCP.
-        mcp_app = mcp.streamable_http_app()
-
-        async def app(scope, receive, send):
-            if scope["type"] in ("http", "websocket"):
-                scope = {
-                    **scope,
-                    "headers": [
-                        (b"host", b"localhost") if k == b"host" else (k, v)
-                        for k, v in scope.get("headers", [])
-                    ],
-                }
-            await mcp_app(scope, receive, send)
-
-        uvicorn.run(app, host="0.0.0.0", port=port)
+        mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
