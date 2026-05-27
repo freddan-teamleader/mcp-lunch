@@ -112,16 +112,58 @@ def _fetch(url: str) -> str:
         return resp.text
 
 
+def _preprocess_dish_lines(lines: list[str], restaurant_name: str) -> list[str]:
+    """
+    Clean up raw text lines before dish parsing:
+    - Drop navigation fragments that the site splits across spans
+    - Drop the restaurant name itself (appears as a text anchor after the logo)
+    - Join split price tokens: "139" + "kr" → "139 kr"
+    """
+    NAV = frozenset({
+        "veckansluncher", "veckans", "luncher",
+        "hitta hit", "hitta", "hit",
+        "visa alla lunchrätter", "visa fler",
+    })
+    name_lower = restaurant_name.lower()
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        curr = lines[i]
+        curr_lower = curr.lower()
+
+        # Skip navigation fragments and the restaurant name itself
+        if curr_lower in NAV or curr_lower == name_lower:
+            i += 1
+            continue
+
+        # Join bare number + "kr" on next line → "NNN kr"
+        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        if re.match(r"^\d+$", curr) and nxt.lower() == "kr":
+            result.append(f"{curr} kr")
+            i += 2
+            continue
+
+        # Drop lone orphan "kr"
+        if curr_lower == "kr":
+            i += 1
+            continue
+
+        result.append(curr)
+        i += 1
+    return result
+
+
 def _parse_lunch_page(html: str) -> list[dict]:
     """
     Parse the rendered HTML from a lunch city page.
     Returns a list of restaurant dicts, each with:
-      name, slug, url, dishes (list of {name, price, vegetarian, tags})
+      name, slug, logo, url, dishes (list of {name, price, vegetarian, tags})
 
-    Strategy: replace <img alt="..."> with the alt text so that
-    get_text() surfaces the "Name i City lunchmeny" marker that
-    the site embeds in every restaurant logo's alt attribute.
-    Then split the full page text into per-restaurant sections.
+    Strategy:
+    1. Collect slug → href and slug → logo_url from anchor/img pairs.
+    2. Replace <img alt="..."> with alt text so get_text() surfaces the
+       "Name i City lunchmeny" section markers.
+    3. Split the full page text into per-restaurant sections.
     """
     from bs4 import BeautifulSoup
 
@@ -129,35 +171,43 @@ def _parse_lunch_page(html: str) -> list[dict]:
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
 
-    # Inline img alt text so get_text() picks up the "lunchmeny" markers
-    for img in soup.find_all("img"):
-        img.replace_with(img.get("alt", ""))
-
-    # ── Collect unique slug → href (skip "Veckansluncher" navigation links) ──
+    # ── 1. Collect slug → href and slug → logo BEFORE replacing img tags ──
     slug_to_href: dict[str, str] = {}
+    slug_to_logo: dict[str, str] = {}
     for a in soup.find_all("a", href=re.compile(r"^/lunch/[^/]+/[^/]+/?$")):
-        if "veckansluncher" in a.get_text(strip=True).lower():
-            continue
+        img = a.find("img")
         href = a.get("href", "")
         parts = [p for p in href.strip("/").split("/") if p]
-        if len(parts) == 3 and parts[2] not in slug_to_href:
-            slug_to_href[parts[2]] = href
+        if len(parts) != 3:
+            continue
+        slug = parts[2]
+        if img:
+            alt = img.get("alt", "")
+            if "veckansluncher" in alt.lower():
+                continue
+            if slug not in slug_to_href:
+                slug_to_href[slug] = href
+                slug_to_logo[slug] = img.get("src", "")
+        else:
+            link_text = a.get_text(strip=True)
+            if "veckansluncher" not in link_text.lower() and slug not in slug_to_href:
+                slug_to_href[slug] = href
+
+    # ── 2. Inline img alt text for get_text() section detection ─────────
+    for img in soup.find_all("img"):
+        img.replace_with(img.get("alt", ""))
 
     # Infer city slug from any collected href
     city_slug = ""
     if slug_to_href:
-        first = next(iter(slug_to_href.values()))
-        p = first.strip("/").split("/")
+        p = next(iter(slug_to_href.values())).strip("/").split("/")
         city_slug = p[1] if len(p) >= 2 else ""
 
-    # ── Split page text into sections by "Name i City lunchmeny" lines ──
-    LUNCHMENY_RE = re.compile(
-        r"^(.+?)\s+i\s+\S.*?\s+lunchmeny\b", re.IGNORECASE
-    )
-    SKIP = frozenset({"veckansluncher", "hitta hit", "visa alla lunchrätter"})
+    # ── 3. Split page text into per-restaurant sections ──────────────────
+    LUNCHMENY_RE = re.compile(r"^(.+?)\s+i\s+\S.*?\s+lunchmeny\b", re.IGNORECASE)
+    GLOBAL_SKIP = frozenset({"veckansluncher", "hitta hit", "visa alla lunchrätter"})
 
     lines = [l.strip() for l in soup.get_text("\n").splitlines() if l.strip()]
-
     sections: list[tuple[str, list[str]]] = []
     cur_name: str | None = None
     cur_lines: list[str] = []
@@ -169,13 +219,13 @@ def _parse_lunch_page(html: str) -> list[dict]:
                 sections.append((cur_name, cur_lines))
             cur_name = m.group(1).strip()
             cur_lines = []
-        elif cur_name is not None and line.lower() not in SKIP:
+        elif cur_name is not None and line.lower() not in GLOBAL_SKIP:
             cur_lines.append(line)
 
     if cur_name is not None:
         sections.append((cur_name, cur_lines))
 
-    # ── Match each section to a known slug ──────────────────────────────
+    # ── 4. Match sections to slugs and build result ──────────────────────
     def _to_slug(name: str) -> str:
         s = name.lower()
         for fr, to in [("å","a"),("ä","a"),("ö","o"),("é","e"),("è","e"),
@@ -193,14 +243,12 @@ def _parse_lunch_page(html: str) -> list[dict]:
         seen.add(key)
 
         guess = _to_slug(raw_name)
-        best_slug = slug_to_href.get(guess)
+        best_slug: str | None = None
         best_href: str | None = None
 
-        if best_slug:
-            best_href = slug_to_href[guess]
-            best_slug = guess
+        if guess in slug_to_href:
+            best_slug, best_href = guess, slug_to_href[guess]
         else:
-            # Substring fallback
             for slug, href in slug_to_href.items():
                 if guess[:8] == slug[:8]:
                     best_slug, best_href = slug, href
@@ -214,8 +262,9 @@ def _parse_lunch_page(html: str) -> list[dict]:
             "name": raw_name,
             "slug": best_slug,
             "city": city_slug,
+            "logo": slug_to_logo.get(best_slug, ""),
             "url": f"{BASE_URL}{best_href}",
-            "dishes": _parse_dishes(dish_lines),
+            "dishes": _parse_dishes(_preprocess_dish_lines(dish_lines, raw_name)),
         })
 
     return restaurants
