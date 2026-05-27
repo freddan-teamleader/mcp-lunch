@@ -13,6 +13,8 @@ import re
 import httpx
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response as StarletteResponse
 
 # ---------------------------------------------------------------------------
 # MCP app
@@ -425,6 +427,44 @@ def get_restaurant_menu(city: str, restaurant: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Image proxy middleware
+# ---------------------------------------------------------------------------
+
+
+class ImageProxyMiddleware(BaseHTTPMiddleware):
+    """
+    Serves /image-proxy?path=/assets/... from the source site.
+    Needed because the Cowork widget sandbox blocks cross-origin images.
+    """
+
+    async def dispatch(self, request, call_next):
+        if request.url.path == "/image-proxy":
+            path = request.query_params.get("path", "")
+            if path and path.startswith("/assets/"):
+                url = f"{BASE_URL}{path}"
+                try:
+                    async with httpx.AsyncClient(
+                        follow_redirects=True, timeout=10
+                    ) as client:
+                        resp = await client.get(url, headers=HEADERS)
+                        resp.raise_for_status()
+                        return StarletteResponse(
+                            content=resp.content,
+                            media_type=resp.headers.get("content-type", "image/jpeg"),
+                            headers={
+                                "Cache-Control": "public, max-age=3600",
+                                "Access-Control-Allow-Origin": "*",
+                            },
+                        )
+                except Exception as exc:
+                    return StarletteResponse(
+                        f"Proxy error: {exc}", status_code=502
+                    )
+            return StarletteResponse("Bad request", status_code=400)
+        return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
@@ -440,4 +480,6 @@ if __name__ == "__main__":
         # HTTP server — default, used on Railway and any other hosted environment
         import uvicorn
         port = int(os.environ.get("PORT", "8000"))
-        uvicorn.run(mcp.streamable_http_app(), host="0.0.0.0", port=port)
+        app = mcp.streamable_http_app()
+        app.add_middleware(ImageProxyMiddleware)
+        uvicorn.run(app, host="0.0.0.0", port=port)
