@@ -11,6 +11,7 @@ Tools exposed:
 
 import re
 import time
+import math
 import base64
 import json
 import httpx
@@ -421,17 +422,17 @@ def get_lunch_guide(city: str) -> str:
     cache_key = f"lunch:{city}"
     cached = _cache_get(cache_key)
     if cached is not None:
-        return cached  # type: ignore[return-value]
+        return json.dumps(cached, ensure_ascii=False)
 
     url = f"{BASE_URL}/lunch/{city}/"
     try:
         html = _fetch(url)
     except httpx.HTTPStatusError as e:
-        return [{"error": f"Could not fetch lunch guide for '{city}': {e}"}]
+        return json.dumps([{"error": f"Could not fetch lunch guide for '{city}': {e}"}])
 
     restaurants = _parse_lunch_page(html)
     if not restaurants:
-        return [{"error": f"No lunch data found for city '{city}'. Try a different slug."}]
+        return json.dumps([{"error": f"No lunch data found for city '{city}'. Try a different slug."}])
 
     _cache_set(cache_key, restaurants)
     return json.dumps(restaurants, ensure_ascii=False)
@@ -462,21 +463,21 @@ def get_logos(city: str) -> str:
     cache_key = f"logos:{city}"
     cached = _cache_get(cache_key)
     if cached is not None:
-        return cached  # type: ignore[return-value]
+        return json.dumps(cached, ensure_ascii=False)
 
     # Re-use cached lunch data when possible
-    restaurants = _cache_get(f"lunch:{city}")
+    restaurants: list[dict] = _cache_get(f"lunch:{city}") or []  # type: ignore[assignment]
     if not restaurants:
         try:
             html = _fetch(f"{BASE_URL}/lunch/{city}/")
         except httpx.HTTPStatusError:
-            return {}
+            return json.dumps({})
         restaurants = _parse_lunch_page(html)
         _cache_set(f"lunch:{city}", restaurants)
 
     result: dict[str, str] = {}
     with httpx.Client(follow_redirects=True, timeout=10) as client:
-        for r in restaurants:  # type: ignore[union-attr]
+        for r in restaurants:
             slug = r.get("slug", "")
             path = r.get("logo", "")
             if not (slug and path):
@@ -492,6 +493,94 @@ def get_logos(city: str) -> str:
 
     _cache_set(cache_key, result)
     return json.dumps(result, ensure_ascii=False)
+
+
+# ---------------------------------------------------------------------------
+# Geocoding helpers (Nominatim, rate-limited, cached forever per session)
+# ---------------------------------------------------------------------------
+
+_geo_cache: dict[str, tuple[float, float] | None] = {}
+
+
+def _geocode(name: str, city_display: str) -> tuple[float, float] | None:
+    key = f"{name}|{city_display}"
+    if key in _geo_cache:
+        return _geo_cache[key]
+    try:
+        resp = httpx.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": f"{name}, {city_display}, Sverige", "format": "json", "limit": "1"},
+            headers={"User-Agent": "mcp-lunch/1.0 (lunch guide)"},
+            timeout=5,
+            follow_redirects=True,
+        )
+        data = resp.json()
+        coords = (float(data[0]["lat"]), float(data[0]["lon"])) if data else None
+    except Exception:
+        coords = None
+    _geo_cache[key] = coords
+    time.sleep(1.1)  # Nominatim rate limit: max 1 req/s
+    return coords
+
+
+def _haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Distance in km between two WGS84 coordinates."""
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(a))
+
+
+@mcp.tool()
+def get_lunch_near(city: str, lat: float, lon: float, radius_km: float = 1.0) -> str:
+    """
+    Get today's lunch menus for restaurants within a given radius of a location.
+
+    Args:
+        city:       City slug (e.g. "umea", "kalmar"). Use list_cities() for valid slugs.
+        lat:        Latitude of the center point (WGS84, decimal degrees).
+        lon:        Longitude of the center point (WGS84, decimal degrees).
+        radius_km:  Search radius in kilometres. Default 1.0.
+
+    Returns:
+        A JSON string — parse with JSON.parse() (JS) or json.loads() (Python).
+        Same restaurant/dish structure as get_lunch_guide, but with an added field:
+          - distance_km (float): straight-line distance from the given point.
+        Sorted nearest-first. Restaurants whose address could not be geocoded are excluded.
+
+        Note: geocoding uses Nominatim (OpenStreetMap) with a 1 s rate limit between
+        requests — the first call for a city may take 10–30 s depending on restaurant count.
+        Subsequent calls within the same server session are instant (cached in memory).
+
+        Note: when called via callMcpTool in a Cowork artifact the response arrives as
+              {content: [{type:"text", text:"<this JSON string>"}]} — read content[0].text
+              and JSON.parse it to get the array.
+    """
+    city = city.lower().strip()
+    city_display = CITIES.get(city, city.capitalize())
+
+    # Get (or fetch) the full restaurant list
+    restaurants: list[dict] = _cache_get(f"lunch:{city}") or []  # type: ignore[assignment]
+    if not restaurants:
+        try:
+            html = _fetch(f"{BASE_URL}/lunch/{city}/")
+        except httpx.HTTPStatusError as e:
+            return json.dumps([{"error": str(e)}])
+        restaurants = _parse_lunch_page(html)
+        _cache_set(f"lunch:{city}", restaurants)
+
+    nearby = []
+    for r in restaurants:
+        coords = _geocode(r["name"], city_display)
+        if coords is None:
+            continue
+        dist = _haversine(lat, lon, coords[0], coords[1])
+        if dist <= radius_km:
+            nearby.append({**r, "distance_km": round(dist, 2)})
+
+    nearby.sort(key=lambda x: x["distance_km"])
+    return json.dumps(nearby, ensure_ascii=False)
 
 
 @mcp.tool()
