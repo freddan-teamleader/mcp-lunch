@@ -1,8 +1,8 @@
-# mcp-lunch
+# Lunch Guide MCP
 
 An MCP server that fetches today's lunch menus for Swedish cities.
 
-Data is sourced from [matochmat.se](https://www.matochmat.se) and updated daily by the restaurants themselves.
+Menus are updated daily by the restaurants themselves.
 
 ## Tools
 
@@ -139,7 +139,7 @@ The health check endpoint is at `/health` — Railway uses it to confirm the ser
 
 ## Notes
 
-- Menus are updated daily by the restaurants on matochmat.se.
+- Menus are updated daily by the restaurants themselves.
 - City slugs use ASCII versions of Swedish characters (e.g. `umea` for Umeå, `goteborg` for Göteborg).
 - The server fetches live data on every tool call — no caching.
 - Transport mode is controlled by the `MCP_TRANSPORT` env var: `stdio` (default, local) or `sse` (remote).
