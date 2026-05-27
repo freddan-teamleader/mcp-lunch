@@ -11,6 +11,7 @@ Tools exposed:
 
 import re
 import time
+import base64
 import httpx
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -424,6 +425,57 @@ def get_lunch_guide(city: str) -> list[dict]:
 
     _cache_set(cache_key, restaurants)
     return restaurants
+
+
+@mcp.tool()
+def get_logos(city: str) -> dict:
+    """
+    Get base64-encoded logo images for all restaurants in a city.
+
+    Args:
+        city: City slug (e.g. "umea", "kalmar"). Use list_cities() for valid slugs.
+
+    Returns:
+        A dict mapping restaurant slug to a data URL string
+        (e.g. {"bistro-sjostugan": "data:image/jpeg;base64,..."}).
+        Use the value directly as an <img src> attribute.
+        Restaurants without a logo are omitted.
+    """
+    city = city.lower().strip()
+
+    cache_key = f"logos:{city}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+
+    # Re-use cached lunch data when possible
+    restaurants = _cache_get(f"lunch:{city}")
+    if not restaurants:
+        try:
+            html = _fetch(f"{BASE_URL}/lunch/{city}/")
+        except httpx.HTTPStatusError:
+            return {}
+        restaurants = _parse_lunch_page(html)
+        _cache_set(f"lunch:{city}", restaurants)
+
+    result: dict[str, str] = {}
+    with httpx.Client(follow_redirects=True, timeout=10) as client:
+        for r in restaurants:  # type: ignore[union-attr]
+            slug = r.get("slug", "")
+            path = r.get("logo", "")
+            if not (slug and path):
+                continue
+            try:
+                resp = client.get(f"{BASE_URL}{path}", headers=HEADERS)
+                resp.raise_for_status()
+                ct = resp.headers.get("content-type", "image/jpeg").split(";")[0]
+                b64 = base64.b64encode(resp.content).decode()
+                result[slug] = f"data:{ct};base64,{b64}"
+            except Exception:
+                pass
+
+    _cache_set(cache_key, result)
+    return result
 
 
 @mcp.tool()
