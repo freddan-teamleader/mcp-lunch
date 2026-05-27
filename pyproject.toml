@@ -1,16 +1,18 @@
 [project]
-name = "matochmat-lunch-mcp"
+name = "mcp-lunch"
 version = "0.1.0"
-description = "MCP server that fetches lunch guides from matochmat.se"
+description = "MCP server that fetches Swedish restaurant lunch guides"
 requires-python = ">=3.10"
 dependencies = [
     "mcp[cli]>=1.0.0",
     "httpx>=0.27.0",
     "beautifulsoup4>=4.12.0",
+    "uvicorn>=0.30.0",
+    "starlette>=0.40.0",
 ]
 
 [project.scripts]
-matochmat-lunch-mcp = "server:mcp.run"
+mcp-lunch = "server:mcp.run"
 
 [build-system]
 requires = ["hatchling"]

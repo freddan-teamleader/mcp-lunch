@@ -1,6 +1,8 @@
-# matochmat-lunch-mcp
+# mcp-lunch
 
-An MCP server that fetches today's lunch guides from [matochmat.se](https://www.matochmat.se) for Swedish cities.
+An MCP server that fetches today's lunch menus for Swedish cities.
+
+Data is sourced from [matochmat.se](https://www.matochmat.se) and updated daily by the restaurants themselves.
 
 ## Tools
 
@@ -12,10 +14,11 @@ An MCP server that fetches today's lunch guides from [matochmat.se](https://www.
 
 ## Installation
 
-### 1. Clone / copy the project
+### 1. Clone the repo
 
 ```bash
-cd matochmat-lunch-mcp
+git clone git@bitbucket.org:infomaker/mcp-lunch.git
+cd mcp-lunch
 ```
 
 ### 2. Install dependencies (uv recommended)
@@ -46,22 +49,20 @@ Add the following to your `claude_desktop_config.json`
 ```json
 {
   "mcpServers": {
-    "matochmat-lunch": {
+    "lunch-guide": {
       "command": "python",
-      "args": ["/FULL/PATH/TO/matochmat-lunch-mcp/server.py"]
+      "args": ["/FULL/PATH/TO/mcp-lunch/server.py"]
     }
   }
 }
 ```
-
-Replace `/FULL/PATH/TO/` with the actual path to the project folder.
 
 If you're using a virtual environment or `uv`:
 
 ```json
 {
   "mcpServers": {
-    "matochmat-lunch": {
+    "lunch-guide": {
       "command": "uv",
       "args": [
         "run",
@@ -69,7 +70,7 @@ If you're using a virtual environment or `uv`:
         "--with", "httpx",
         "--with", "beautifulsoup4",
         "python",
-        "/FULL/PATH/TO/matochmat-lunch-mcp/server.py"
+        "/FULL/PATH/TO/mcp-lunch/server.py"
       ]
     }
   }
@@ -79,12 +80,12 @@ If you're using a virtual environment or `uv`:
 ## Configure in Claude Code (CLI)
 
 ```bash
-claude mcp add matochmat-lunch -- python /FULL/PATH/TO/matochmat-lunch-mcp/server.py
+claude mcp add lunch-guide -- python /FULL/PATH/TO/mcp-lunch/server.py
 ```
 
 ## Example usage
 
-Once connected, you can ask Claude things like:
+Once connected, you can ask things like:
 
 - "What's for lunch in Umeå today?"
 - "Show me the lunch options in Stockholm"
@@ -99,11 +100,11 @@ Run `list_cities` to get the full list. Some examples:
 
 ## Deploy to Railway (free)
 
-Railway lets you host the MCP server in the cloud so any machine can use it without a local Python install.
+Railway lets you host the server in the cloud so any machine can use it without a local Python install.
 
 ### Steps
 
-1. **Push the project to GitHub** (or use Railway's CLI directly)
+1. **Push the repo to GitHub** (or use Railway's CLI directly)
 
 2. **Create a Railway project** at [railway.app](https://railway.app) → *New Project* → *Deploy from GitHub repo* → select this repo
 
@@ -114,13 +115,13 @@ Railway lets you host the MCP server in the cloud so any machine can use it with
 
 4. **Generate a public domain** in the Railway dashboard:
    *Settings* → *Networking* → *Generate Domain*
-   You'll get a URL like `https://matochmat-lunch-mcp-production.up.railway.app`
+   You'll get a URL like `https://mcp-lunch-production.up.railway.app`
 
 5. **Connect Claude Desktop** — update `claude_desktop_config.json`:
    ```json
    {
      "mcpServers": {
-       "matochmat-lunch": {
+       "lunch-guide": {
          "url": "https://YOUR-APP.up.railway.app/sse"
        }
      }
@@ -129,7 +130,7 @@ Railway lets you host the MCP server in the cloud so any machine can use it with
 
 6. **Connect Claude Code (CLI)**:
    ```bash
-   claude mcp add --transport sse matochmat-lunch https://YOUR-APP.up.railway.app/sse
+   claude mcp add --transport sse lunch-guide https://YOUR-APP.up.railway.app/sse
    ```
 
 The health check endpoint is at `/health` — Railway uses it to confirm the service is up.
@@ -138,6 +139,7 @@ The health check endpoint is at `/health` — Railway uses it to confirm the ser
 
 ## Notes
 
-- Menus are updated daily by the restaurants themselves on matochmat.se.
-- City slugs use Swedish characters replaced with ASCII (e.g. `umea` for Umeå, `goteborg` for Göteborg).
+- Menus are updated daily by the restaurants on matochmat.se.
+- City slugs use ASCII versions of Swedish characters (e.g. `umea` for Umeå, `goteborg` for Göteborg).
 - The server fetches live data on every tool call — no caching.
+- Transport mode is controlled by the `MCP_TRANSPORT` env var: `stdio` (default, local) or `sse` (remote).

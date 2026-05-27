@@ -1,7 +1,7 @@
 """
-matochmat-lunch-mcp
--------------------
-An MCP server that fetches today's lunch guides from matochmat.se.
+mcp-lunch
+---------
+An MCP server that fetches today's lunch guides for Swedish cities.
 
 Tools exposed:
   • list_cities          – list all available city slugs
@@ -18,9 +18,9 @@ from mcp.server.fastmcp import FastMCP
 # ---------------------------------------------------------------------------
 
 mcp = FastMCP(
-    name="matochmat-lunch",
+    name="lunch-guide",
     instructions=(
-        "Use this server to look up Swedish restaurant lunch menus from matochmat.se. "
+        "Use this server to look up Swedish restaurant lunch menus. "
         "Call list_cities first to get valid city slugs, then get_lunch_guide for today's "
         "menus in a city, or get_restaurant_menu for a specific restaurant's full week."
     ),
@@ -108,7 +108,7 @@ def _fetch(url: str) -> str:
 
 def _parse_lunch_page(html: str) -> list[dict]:
     """
-    Parse the rendered HTML from a matochmat.se lunch city page.
+    Parse the rendered HTML from a lunch city page.
     Returns a list of restaurant dicts, each with:
       name, slug, url, dishes (list of {name, price, description, vegetarian})
     """
@@ -184,7 +184,7 @@ def _parse_dishes(lines: list[str]) -> list[dict]:
     """
     Convert a flat list of text lines into structured dish objects.
 
-    matochmat.se renders dishes as:
+    The site renders dishes as:
       <dish name / description>
       <price> kr
       Vegetarisk          ← optional tag on the preceding dish
@@ -264,7 +264,7 @@ def _simple_text_parse(html: str) -> str:
 @mcp.tool()
 def list_cities() -> dict:
     """
-    List all Swedish cities that have lunch guides on matochmat.se.
+    List all Swedish cities that have lunch guides available.
 
     Returns a dict mapping city slug (used in other tools) to display name.
     Example: {"umea": "Umeå", "stockholm": "Stockholm", ...}
@@ -353,7 +353,7 @@ if __name__ == "__main__":
         from starlette.routing import Mount, Route
 
         async def health(request: Request) -> JSONResponse:
-            return JSONResponse({"status": "ok", "service": "matochmat-lunch-mcp"})
+            return JSONResponse({"status": "ok", "service": "mcp-lunch"})
 
         # mcp.sse_app() returns an ASGI app that handles /sse and /messages/
         mcp_asgi = mcp.sse_app()
