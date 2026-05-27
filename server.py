@@ -341,11 +341,13 @@ def get_restaurant_menu(city: str, restaurant: str) -> str:
 if __name__ == "__main__":
     import os
 
-    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+    transport = os.environ.get("MCP_TRANSPORT", "sse")
 
-    if transport == "sse":
-        # Remote deployment (Railway, Render, Fly.io …)
-        # Wrap with a tiny health-check endpoint so the platform knows we're up.
+    if transport == "stdio":
+        # Local usage via Claude Desktop / Claude Code
+        mcp.run(transport="stdio")
+    else:
+        # HTTP server — default, used on Railway and any other hosted environment
         import uvicorn
         from starlette.applications import Starlette
         from starlette.requests import Request
@@ -367,6 +369,3 @@ if __name__ == "__main__":
 
         port = int(os.environ.get("PORT", "8000"))
         uvicorn.run(app, host="0.0.0.0", port=port)
-    else:
-        # Local usage via Claude Desktop / Claude Code
-        mcp.run(transport="stdio")

@@ -51,7 +51,8 @@ Add the following to your `claude_desktop_config.json`
   "mcpServers": {
     "lunch-guide": {
       "command": "python",
-      "args": ["/FULL/PATH/TO/mcp-lunch/server.py"]
+      "args": ["/FULL/PATH/TO/mcp-lunch/server.py"],
+      "env": { "MCP_TRANSPORT": "stdio" }
     }
   }
 }
@@ -71,7 +72,8 @@ If you're using a virtual environment or `uv`:
         "--with", "beautifulsoup4",
         "python",
         "/FULL/PATH/TO/mcp-lunch/server.py"
-      ]
+      ],
+      "env": { "MCP_TRANSPORT": "stdio" }
     }
   }
 }
@@ -80,7 +82,7 @@ If you're using a virtual environment or `uv`:
 ## Configure in Claude Code (CLI)
 
 ```bash
-claude mcp add lunch-guide -- python /FULL/PATH/TO/mcp-lunch/server.py
+MCP_TRANSPORT=stdio claude mcp add lunch-guide -- python /FULL/PATH/TO/mcp-lunch/server.py
 ```
 
 ## Example usage
@@ -142,4 +144,4 @@ The health check endpoint is at `/health` — Railway uses it to confirm the ser
 - Menus are updated daily by the restaurants themselves.
 - City slugs use ASCII versions of Swedish characters (e.g. `umea` for Umeå, `goteborg` for Göteborg).
 - The server fetches live data on every tool call — no caching.
-- Transport mode is controlled by the `MCP_TRANSPORT` env var: `stdio` (default, local) or `sse` (remote).
+- Transport mode is controlled by the `MCP_TRANSPORT` env var: `sse` (default, for Railway and other hosted environments) or `stdio` (for local use via Claude Desktop / Claude Code).
