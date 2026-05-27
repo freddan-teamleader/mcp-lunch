@@ -12,6 +12,7 @@ Tools exposed:
 import re
 import time
 import base64
+import json
 import httpx
 from urllib.parse import parse_qs
 from mcp.server.fastmcp import FastMCP
@@ -387,7 +388,7 @@ def list_cities() -> dict:
 
 
 @mcp.tool()
-def get_lunch_guide(city: str) -> list[dict]:
+def get_lunch_guide(city: str) -> str:
     """
     Get today's lunch menus for all restaurants in a Swedish city.
 
@@ -396,14 +397,24 @@ def get_lunch_guide(city: str) -> list[dict]:
               Use list_cities() to get valid slugs.
 
     Returns:
-        A list of restaurant objects, each containing:
+        A JSON string — parse with JSON.parse() (JS) or json.loads() (Python).
+        The parsed value is a list of restaurant objects, each containing:
           - name (str): Restaurant name
-          - slug (str): Restaurant slug for use with get_restaurant_menu
+          - slug (str): Restaurant slug for use with get_restaurant_menu and get_logos
+          - city (str): City slug
+          - logo (str): Relative path to logo image (prepend base URL, or use get_logos for base64)
           - url (str): Direct link to the restaurant's page
           - dishes (list): Today's dishes, each with:
-              - name (str): Dish name and description
-              - price (int|None): Price in SEK
+              - name (str): Dish name or description line
+              - price (int|None): Price in SEK, null for description lines
               - vegetarian (bool): Whether the dish is vegetarian
+              - tags (list[str]): Dietary tags e.g. ["vegetarisk", "glutenfri"]
+              - closed (bool): True if restaurant is closed today
+
+        Note: dishes with price=null are description lines for the preceding priced dish.
+        Note: when called via callMcpTool in a Cowork artifact the response arrives as
+              {content: [{type:"text", text:"<this JSON string>"}]} — read content[0].text
+              and JSON.parse it to get the array.
     """
     city = city.lower().strip()
 
@@ -423,11 +434,11 @@ def get_lunch_guide(city: str) -> list[dict]:
         return [{"error": f"No lunch data found for city '{city}'. Try a different slug."}]
 
     _cache_set(cache_key, restaurants)
-    return restaurants
+    return json.dumps(restaurants, ensure_ascii=False)
 
 
 @mcp.tool()
-def get_logos(city: str) -> dict:
+def get_logos(city: str) -> str:
     """
     Get base64-encoded logo images for all restaurants in a city.
 
@@ -435,10 +446,16 @@ def get_logos(city: str) -> dict:
         city: City slug (e.g. "umea", "kalmar"). Use list_cities() for valid slugs.
 
     Returns:
-        A dict mapping restaurant slug to a data URL string
-        (e.g. {"bistro-sjostugan": "data:image/jpeg;base64,..."}).
-        Use the value directly as an <img src> attribute.
-        Restaurants without a logo are omitted.
+        A JSON string — parse with JSON.parse() (JS) or json.loads() (Python).
+        The parsed value is a dict mapping restaurant slug → data URL string,
+        e.g. {"bistro-sjostugan": "data:image/jpeg;base64,..."}
+        Use the data URL directly as an <img src> attribute — works in any context
+        including sandboxed iframes (no external request needed).
+        Restaurants without a logo are omitted from the dict.
+
+        Note: when called via callMcpTool in a Cowork artifact the response arrives as
+              {content: [{type:"text", text:"<this JSON string>"}]} — read content[0].text
+              and JSON.parse it to get the dict.
     """
     city = city.lower().strip()
 
@@ -474,7 +491,7 @@ def get_logos(city: str) -> dict:
                 pass
 
     _cache_set(cache_key, result)
-    return result
+    return json.dumps(result, ensure_ascii=False)
 
 
 @mcp.tool()
