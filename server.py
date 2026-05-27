@@ -116,72 +116,107 @@ def _parse_lunch_page(html: str) -> list[dict]:
     """
     Parse the rendered HTML from a lunch city page.
     Returns a list of restaurant dicts, each with:
-      name, slug, url, dishes (list of {name, price, description, vegetarian})
+      name, slug, url, dishes (list of {name, price, vegetarian, tags})
+
+    Strategy: replace <img alt="..."> with the alt text so that
+    get_text() surfaces the "Name i City lunchmeny" marker that
+    the site embeds in every restaurant logo's alt attribute.
+    Then split the full page text into per-restaurant sections.
     """
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html, "html.parser")
-    restaurants = []
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
 
-    # Each restaurant is wrapped in a section/card.
-    # The structure uses repeated patterns: logo image link → dish entries.
-    # We look for anchor tags pointing to /lunch/{city}/{restaurant}/
-    restaurant_anchors = soup.find_all(
-        "a", href=re.compile(r"^/lunch/[^/]+/[^/]+/?$")
-    )
+    # Inline img alt text so get_text() picks up the "lunchmeny" markers
+    for img in soup.find_all("img"):
+        img.replace_with(img.get("alt", ""))
 
-    for anchor in restaurant_anchors:
-        href = anchor.get("href", "")
-        parts = [p for p in href.strip("/").split("/") if p]
-        if len(parts) < 3:
+    # ── Collect unique slug → href (skip "Veckansluncher" navigation links) ──
+    slug_to_href: dict[str, str] = {}
+    for a in soup.find_all("a", href=re.compile(r"^/lunch/[^/]+/[^/]+/?$")):
+        if "veckansluncher" in a.get_text(strip=True).lower():
             continue
-        city_slug = parts[1]
-        rest_slug = parts[2]
+        href = a.get("href", "")
+        parts = [p for p in href.strip("/").split("/") if p]
+        if len(parts) == 3 and parts[2] not in slug_to_href:
+            slug_to_href[parts[2]] = href
 
-        # Try to get restaurant name from img alt or surrounding text
-        img = anchor.find("img")
-        name = ""
-        if img:
-            alt = img.get("alt", "")
-            # alt is like "Bistro Le Garage i Umeå lunchmeny"
-            name = re.sub(r"\s+i\s+\S+\s+lunchmeny$", "", alt).strip()
-            name = re.sub(r"\s+lunchmeny$", "", name).strip()
+    # Infer city slug from any collected href
+    city_slug = ""
+    if slug_to_href:
+        first = next(iter(slug_to_href.values()))
+        p = first.strip("/").split("/")
+        city_slug = p[1] if len(p) >= 2 else ""
 
-        if not name:
-            name = rest_slug.replace("-", " ").title()
+    # ── Split page text into sections by "Name i City lunchmeny" lines ──
+    LUNCHMENY_RE = re.compile(
+        r"^(.+?)\s+i\s+\S.*?\s+lunchmeny\b", re.IGNORECASE
+    )
+    SKIP = frozenset({"veckansluncher", "hitta hit", "visa alla lunchrätter"})
 
-        # Collect the dishes that follow this anchor until the next restaurant anchor
-        dishes = []
-        # Walk siblings/following nodes in the parent container
-        parent = anchor.find_parent()
-        if parent:
-            # Find this anchor's position among all siblings and gather dish info
-            # after it until the next restaurant anchor
-            collecting = False
-            for sibling in parent.find_next_siblings():
-                # Stop if we hit another restaurant anchor
-                if sibling.find("a", href=re.compile(r"^/lunch/[^/]+/[^/]+/?$")):
+    lines = [l.strip() for l in soup.get_text("\n").splitlines() if l.strip()]
+
+    sections: list[tuple[str, list[str]]] = []
+    cur_name: str | None = None
+    cur_lines: list[str] = []
+
+    for line in lines:
+        m = LUNCHMENY_RE.match(line)
+        if m:
+            if cur_name is not None:
+                sections.append((cur_name, cur_lines))
+            cur_name = m.group(1).strip()
+            cur_lines = []
+        elif cur_name is not None and line.lower() not in SKIP:
+            cur_lines.append(line)
+
+    if cur_name is not None:
+        sections.append((cur_name, cur_lines))
+
+    # ── Match each section to a known slug ──────────────────────────────
+    def _to_slug(name: str) -> str:
+        s = name.lower()
+        for fr, to in [("å","a"),("ä","a"),("ö","o"),("é","e"),("è","e"),
+                       ("ê","e"),("ü","u"),("ï","i"),("ó","o"),("ú","u")]:
+            s = s.replace(fr, to)
+        return re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+
+    seen: set[str] = set()
+    restaurants: list[dict] = []
+
+    for raw_name, dish_lines in sections:
+        key = raw_name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+
+        guess = _to_slug(raw_name)
+        best_slug = slug_to_href.get(guess)
+        best_href: str | None = None
+
+        if best_slug:
+            best_href = slug_to_href[guess]
+            best_slug = guess
+        else:
+            # Substring fallback
+            for slug, href in slug_to_href.items():
+                if guess[:8] == slug[:8]:
+                    best_slug, best_href = slug, href
                     break
-                # Look for dish-like text: name + price pattern
-                text = sibling.get_text(separator="\n", strip=True)
-                for line in text.split("\n"):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    dishes.append(line)
 
-        # Parse dishes into structured form
-        structured_dishes = _parse_dishes(dishes)
+        if best_slug is None:
+            best_slug = guess
+            best_href = f"/lunch/{city_slug}/{guess}/"
 
-        restaurants.append(
-            {
-                "name": name,
-                "slug": rest_slug,
-                "city": city_slug,
-                "url": f"{BASE_URL}{href}",
-                "dishes": structured_dishes,
-            }
-        )
+        restaurants.append({
+            "name": raw_name,
+            "slug": best_slug,
+            "city": city_slug,
+            "url": f"{BASE_URL}{best_href}",
+            "dishes": _parse_dishes(dish_lines),
+        })
 
     return restaurants
 
