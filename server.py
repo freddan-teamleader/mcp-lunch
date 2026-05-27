@@ -348,24 +348,5 @@ if __name__ == "__main__":
         mcp.run(transport="stdio")
     else:
         # HTTP server — default, used on Railway and any other hosted environment
-        import uvicorn
-        from starlette.applications import Starlette
-        from starlette.requests import Request
-        from starlette.responses import JSONResponse
-        from starlette.routing import Mount, Route
-
-        async def health(request: Request) -> JSONResponse:
-            return JSONResponse({"status": "ok", "service": "mcp-lunch"})
-
-        # streamable_http_app() uses plain POST requests — works through HTTP/2 proxies
-        mcp_asgi = mcp.streamable_http_app()
-
-        app = Starlette(
-            routes=[
-                Route("/health", health),
-                Mount("/", app=mcp_asgi),
-            ]
-        )
-
         port = int(os.environ.get("PORT", "8000"))
-        uvicorn.run(app, host="0.0.0.0", port=port)
+        mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
