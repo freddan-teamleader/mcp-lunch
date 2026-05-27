@@ -10,6 +10,7 @@ Tools exposed:
 """
 
 import re
+import time
 import httpx
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -99,6 +100,27 @@ CITIES: dict[str, str] = {
     "timra": "Timrå",
     "alvsbyn": "Älvsbyn",
 }
+
+
+# ---------------------------------------------------------------------------
+# Simple in-memory cache  (single-process, TTL-based)
+# ---------------------------------------------------------------------------
+
+_cache: dict[str, tuple[float, object]] = {}
+CACHE_TTL = 1800  # 30 minutes — lunch data changes at most once a day
+
+
+def _cache_get(key: str) -> object | None:
+    if key in _cache:
+        ts, val = _cache[key]
+        if time.time() - ts < CACHE_TTL:
+            return val
+        del _cache[key]
+    return None
+
+
+def _cache_set(key: str, val: object) -> None:
+    _cache[key] = (time.time(), val)
 
 
 # ---------------------------------------------------------------------------
@@ -384,9 +406,11 @@ def get_lunch_guide(city: str) -> list[dict]:
               - vegetarian (bool): Whether the dish is vegetarian
     """
     city = city.lower().strip()
-    if city not in CITIES:
-        # Try anyway – new cities may have been added to the site
-        pass
+
+    cache_key = f"lunch:{city}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached  # type: ignore[return-value]
 
     url = f"{BASE_URL}/lunch/{city}/"
     try:
@@ -398,6 +422,7 @@ def get_lunch_guide(city: str) -> list[dict]:
     if not restaurants:
         return [{"error": f"No lunch data found for city '{city}'. Try a different slug."}]
 
+    _cache_set(cache_key, restaurants)
     return restaurants
 
 
