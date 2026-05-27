@@ -348,5 +348,6 @@ if __name__ == "__main__":
         mcp.run(transport="stdio")
     else:
         # HTTP server — default, used on Railway and any other hosted environment
+        import uvicorn
         port = int(os.environ.get("PORT", "8000"))
-        mcp.run(transport="streamable-http", host="0.0.0.0", port=port)
+        uvicorn.run(mcp.streamable_http_app(), host="0.0.0.0", port=port)
