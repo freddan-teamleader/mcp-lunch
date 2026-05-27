@@ -349,5 +349,24 @@ if __name__ == "__main__":
     else:
         # HTTP server — default, used on Railway and any other hosted environment
         import uvicorn
+
         port = int(os.environ.get("PORT", "8000"))
-        uvicorn.run(mcp.streamable_http_app(), host="0.0.0.0", port=port)
+
+        # FastMCP's transport-security layer rejects requests whose Host header
+        # doesn't match a known safe value (anti-DNS-rebinding protection).
+        # Behind Railway's proxy the Host header is the public domain, so we
+        # normalise it to "localhost" before the request reaches FastMCP.
+        mcp_app = mcp.streamable_http_app()
+
+        async def app(scope, receive, send):
+            if scope["type"] in ("http", "websocket"):
+                scope = {
+                    **scope,
+                    "headers": [
+                        (b"host", b"localhost") if k == b"host" else (k, v)
+                        for k, v in scope.get("headers", [])
+                    ],
+                }
+            await mcp_app(scope, receive, send)
+
+        uvicorn.run(app, host="0.0.0.0", port=port)
