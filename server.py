@@ -357,8 +357,8 @@ if __name__ == "__main__":
         async def health(request: Request) -> JSONResponse:
             return JSONResponse({"status": "ok", "service": "mcp-lunch"})
 
-        # mcp.sse_app() returns an ASGI app that handles /sse and /messages/
-        mcp_asgi = mcp.sse_app()
+        # streamable_http_app() uses plain POST requests — works through HTTP/2 proxies
+        mcp_asgi = mcp.streamable_http_app()
 
         app = Starlette(
             routes=[

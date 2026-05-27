@@ -124,7 +124,7 @@ Railway lets you host the server in the cloud so any machine can use it without 
    {
      "mcpServers": {
        "lunch-guide": {
-         "url": "https://YOUR-APP.up.railway.app/sse"
+         "url": "https://YOUR-APP.up.railway.app/mcp"
        }
      }
    }
@@ -132,7 +132,7 @@ Railway lets you host the server in the cloud so any machine can use it without 
 
 6. **Connect Claude Code (CLI)**:
    ```bash
-   claude mcp add --transport sse lunch-guide https://YOUR-APP.up.railway.app/sse
+   claude mcp add --transport sse lunch-guide https://YOUR-APP.up.railway.app/mcp
    ```
 
 The health check endpoint is at `/health` — Railway uses it to confirm the service is up.
