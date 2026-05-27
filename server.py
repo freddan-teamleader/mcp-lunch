@@ -13,10 +13,9 @@ import re
 import time
 import base64
 import httpx
+from urllib.parse import parse_qs
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response as StarletteResponse
 
 # ---------------------------------------------------------------------------
 # MCP app
@@ -504,41 +503,64 @@ def get_restaurant_menu(city: str, restaurant: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Image proxy middleware
+# Image proxy — pure ASGI, does NOT buffer responses (safe for streaming MCP)
 # ---------------------------------------------------------------------------
 
 
-class ImageProxyMiddleware(BaseHTTPMiddleware):
+class ImageProxyMiddleware:
     """
-    Serves /image-proxy?path=/assets/... from the source site.
-    Needed because the Cowork widget sandbox blocks cross-origin images.
+    Intercepts GET /image-proxy?path=/assets/... and proxies the image.
+    All other requests are passed straight through to the MCP app unchanged.
     """
 
-    async def dispatch(self, request, call_next):
-        if request.url.path == "/image-proxy":
-            path = request.query_params.get("path", "")
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http" and scope.get("path") == "/image-proxy":
+            qs = parse_qs(scope.get("query_string", b"").decode())
+            path = (qs.get("path") or [""])[0]
+
             if path and path.startswith("/assets/"):
-                url = f"{BASE_URL}{path}"
                 try:
                     async with httpx.AsyncClient(
                         follow_redirects=True, timeout=10
                     ) as client:
-                        resp = await client.get(url, headers=HEADERS)
+                        resp = await client.get(f"{BASE_URL}{path}", headers=HEADERS)
                         resp.raise_for_status()
-                        return StarletteResponse(
-                            content=resp.content,
-                            media_type=resp.headers.get("content-type", "image/jpeg"),
-                            headers={
-                                "Cache-Control": "public, max-age=3600",
-                                "Access-Control-Allow-Origin": "*",
-                            },
-                        )
+                    ct = resp.headers.get("content-type", "image/jpeg").encode()
+                    body = resp.content
+                    await send({
+                        "type": "http.response.start",
+                        "status": 200,
+                        "headers": [
+                            [b"content-type", ct],
+                            [b"content-length", str(len(body)).encode()],
+                            [b"cache-control", b"public, max-age=3600"],
+                            [b"access-control-allow-origin", b"*"],
+                        ],
+                    })
+                    await send({"type": "http.response.body", "body": body})
+                    return
                 except Exception as exc:
-                    return StarletteResponse(
-                        f"Proxy error: {exc}", status_code=502
-                    )
-            return StarletteResponse("Bad request", status_code=400)
-        return await call_next(request)
+                    msg = f"Proxy error: {exc}".encode()
+                    await send({
+                        "type": "http.response.start",
+                        "status": 502,
+                        "headers": [[b"content-type", b"text/plain"]],
+                    })
+                    await send({"type": "http.response.body", "body": msg})
+                    return
+
+            await send({
+                "type": "http.response.start",
+                "status": 400,
+                "headers": [[b"content-type", b"text/plain"]],
+            })
+            await send({"type": "http.response.body", "body": b"Bad request"})
+            return
+
+        await self.app(scope, receive, send)
 
 
 # ---------------------------------------------------------------------------
@@ -557,6 +579,6 @@ if __name__ == "__main__":
         # HTTP server — default, used on Railway and any other hosted environment
         import uvicorn
         port = int(os.environ.get("PORT", "8000"))
-        app = mcp.streamable_http_app()
-        app.add_middleware(ImageProxyMiddleware)
+        mcp_app = mcp.streamable_http_app()
+        app = ImageProxyMiddleware(mcp_app)
         uvicorn.run(app, host="0.0.0.0", port=port)
