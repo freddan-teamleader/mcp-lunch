@@ -622,17 +622,51 @@ class ImageProxyMiddleware:
     def __init__(self, app):
         self.app = app
 
-    async def __call__(self, scope, receive, send):
-        if scope.get("type") == "http" and scope.get("path") == "/image-proxy":
-            qs = parse_qs(scope.get("query_string", b"").decode())
-            path = (qs.get("path") or [""])[0]
+    _LANDING = b"""<!doctype html>
+<html lang="sv">
+<head><meta charset="utf-8"><title>Lunch-guide MCP</title>
+<style>body{font-family:system-ui,sans-serif;max-width:520px;margin:4rem auto;padding:0 1.5rem;color:#222}
+h1{font-size:1.4rem;font-weight:500;margin-bottom:.5rem}
+p{color:#555;line-height:1.7}code{background:#f4f4f4;padding:2px 6px;border-radius:4px;font-size:.9em}
+a{color:#0070f3}</style>
+</head>
+<body>
+<h1>Lunch-guide MCP</h1>
+<p>MCP-server som listar svenska restaurangers lunchmenyer.</p>
+<p>Anslut via:<br><code>https://teamleader.se/lunchguide</code></p>
+<p>Tillgängliga verktyg: <code>list_cities</code> · <code>get_lunch_guide</code> ·
+<code>get_lunch_near</code> · <code>get_logos</code> · <code>get_restaurant_menu</code></p>
+</body></html>"""
 
-            if path and path.startswith("/assets/"):
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+
+        req_path: str = scope.get("path", "")
+
+        # ── Landing page ────────────────────────────────────────────────────
+        if req_path in ("", "/"):
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [[b"content-type", b"text/html; charset=utf-8"],
+                            [b"content-length", str(len(self._LANDING)).encode()]],
+            })
+            await send({"type": "http.response.body", "body": self._LANDING})
+            return
+
+        # ── Image proxy ─────────────────────────────────────────────────────
+        if req_path == "/image-proxy":
+            qs = parse_qs(scope.get("query_string", b"").decode())
+            img_path = (qs.get("path") or [""])[0]
+
+            if img_path and img_path.startswith("/assets/"):
                 try:
                     async with httpx.AsyncClient(
                         follow_redirects=True, timeout=10
                     ) as client:
-                        resp = await client.get(f"{BASE_URL}{path}", headers=HEADERS)
+                        resp = await client.get(f"{BASE_URL}{img_path}", headers=HEADERS)
                         resp.raise_for_status()
                     ct = resp.headers.get("content-type", "image/jpeg").encode()
                     body = resp.content
@@ -665,6 +699,11 @@ class ImageProxyMiddleware:
             })
             await send({"type": "http.response.body", "body": b"Bad request"})
             return
+
+        # ── Path alias: /lunchguide → /mcp ─────────────────────────────────
+        if req_path == "/lunchguide" or req_path.startswith("/lunchguide/"):
+            new_path = "/mcp" + req_path[len("/lunchguide"):]
+            scope = {**scope, "path": new_path, "raw_path": new_path.encode()}
 
         await self.app(scope, receive, send)
 
