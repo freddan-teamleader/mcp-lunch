@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>teamleader.se — landing page directions</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .iframe-wrap {
+    width: 100%; height: 100%; position: relative; overflow: hidden;
+    background: #f3efe6; border-radius: 12px;
+  }
+  .iframe-wrap iframe {
+    width: 100%; height: 100%; border: 0; display: block;
+    background: white;
+  }
+  .open-btn {
+    position: absolute; top: 12px; right: 12px; z-index: 5;
+    background: rgba(15,15,15,0.85); color: white; text-decoration: none;
+    font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px;
+    padding: 6px 10px; border-radius: 6px; letter-spacing: 0.06em;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .open-btn:hover { background: #0f0f0f; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+function Variant({ src }) {
+  return (
+    <div className="iframe-wrap">
+      <a className="open-btn" href={src} target="_blank" rel="noreferrer">OPEN ↗</a>
+      <iframe src={src} title={src} />
+    </div>
+  );
+}
+
+const App = () => (
+  <DesignCanvas>
+    <DCSection
+      id="landings"
+      title="teamleader.se — landing page directions"
+      subtitle="Three bold-gradient directions. EN/SV toggle, AI tech section, live demo agent, info@teamleader.se CTA. Click OPEN to view full-size. Run a Python server (see README.md) to deploy on Railway."
+    >
+      <DCArtboard id="sunset" label="A · Sunset Operator — warm, founder-friendly, terminal chat" width={1280} height={2400}>
+        <Variant src="variants/sunset.html" />
+      </DCArtboard>
+      <DCArtboard id="aurora" label="B · Aurora Stack — dark technical, stack diagram, tool-calling agent" width={1280} height={2400}>
+        <Variant src="variants/aurora.html" />
+      </DCArtboard>
+      <DCArtboard id="acid" label="C · Acid Editorial — magazine layout, manifesto tone, receipt-style chat" width={1280} height={2800}>
+        <Variant src="variants/acid.html" />
+      </DCArtboard>
+    </DCSection>
+  </DesignCanvas>
+);
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

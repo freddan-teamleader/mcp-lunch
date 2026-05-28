@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>teamleader.se — skip the demos. ship the agents.</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Boldonse&family=DM+Sans:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f3efe6;
+    --ink: #0e0e0e;
+    --line: #0e0e0e;
+    --lime: #c8ff3a;
+    --cobalt: #2540ff;
+    --magenta: #ff3aa1;
+    --orange: #ff7a1a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .display { font-family: 'Boldonse', 'DM Sans', sans-serif; font-weight: 400; }
+
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 1000;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>");
+    opacity: 0.10; mix-blend-mode: multiply;
+  }
+
+  /* ----------- Top strip ----------- */
+  .marquee-bar {
+    background: var(--ink); color: var(--paper);
+    padding: 10px 0; overflow: hidden; white-space: nowrap;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase;
+  }
+  .marquee-bar .scroll { display: inline-block; padding-left: 100%; animation: marquee 40s linear infinite; }
+  .marquee-bar .scroll span { margin: 0 24px; }
+  .marquee-bar .scroll span.lime { color: var(--lime); }
+  @keyframes marquee { 0% {transform: translateX(0);} 100% {transform: translateX(-100%);} }
+
+  /* ----------- Nav ----------- */
+  nav.top {
+    position: relative; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 44px; border-bottom: 1px solid var(--line);
+  }
+  .brand { font-family: 'Boldonse', sans-serif; font-size: 22px; letter-spacing: -0.02em; font-weight: 400; line-height: 1; display: flex; align-items: baseline; gap: 2px; }
+  .brand b { font-weight: 400; }
+  .brand .dot { width: 12px; height: 12px; background: var(--cobalt); display: inline-block; margin-right: 8px; transform: translateY(-1px); border-radius: 2px; }
+  .brand .tld { color: var(--magenta); }
+  .nav-mid { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
+  .nav-right { display: flex; align-items: center; gap: 14px; }
+  .lang { display: flex; border: 1px solid var(--line); }
+  .lang button { border: 0; background: var(--paper); padding: 6px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; cursor: pointer; letter-spacing: 0.06em; font-weight: 500; }
+  .lang button.on { background: var(--ink); color: var(--paper); }
+
+  /* ----------- Hero ----------- */
+  .hero {
+    position: relative; padding: 60px 44px 0;
+  }
+  .hero-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+    gap: 0; align-items: start;
+  }
+  .issue {
+    grid-column: 1 / span 4;
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+    border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 16px;
+  }
+  .issue-meta { grid-column: 8 / span 5; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; text-align: right;
+    border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 16px;
+  }
+
+  h1.headline {
+    grid-column: 1 / -1;
+    font-family: 'Boldonse', 'DM Sans', sans-serif; font-weight: 400;
+    font-size: clamp(70px, 11.5vw, 180px); line-height: 0.9; letter-spacing: -0.04em;
+    margin: 24px 0 0; text-transform: uppercase;
+  }
+  h1.headline .row { display: block; }
+  h1.headline .lime-bg { background: var(--lime); padding: 0 18px; display: inline-block; margin-right: 18px; }
+  h1.headline .cobalt { color: var(--cobalt); }
+  h1.headline .magenta { color: var(--magenta); font-style: italic; font-family: serif; font-weight: 400; }
+  h1.headline .strike { text-decoration: line-through; text-decoration-color: var(--magenta); text-decoration-thickness: 8px; opacity: 0.5; }
+  h1.headline .ship { display: inline-block; transform: rotate(-2deg); background: var(--ink); color: var(--lime); padding: 0 18px; }
+
+  .lede-row { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 36px; margin-top: 56px; padding-top: 24px; border-top: 2px solid var(--line); }
+  .lede-row .col h3 { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; margin: 0 0 12px; }
+  .lede-row .col p { margin: 0; font-size: 16px; line-height: 1.5; max-width: 38ch; }
+  .lede-row .col p b { background: var(--lime); padding: 0 4px; font-weight: 700; }
+
+  .cta-row { grid-column: 1 / -1; display: flex; gap: 14px; margin-top: 40px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 18px 28px; font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase;
+    text-decoration: none; cursor: pointer; border: 2px solid var(--ink); transition: all .15s ease;
+  }
+  .btn-primary { background: var(--ink); color: var(--paper); }
+  .btn-primary:hover { background: var(--cobalt); border-color: var(--cobalt); }
+  .btn-ghost { background: var(--paper); color: var(--ink); }
+  .btn-ghost:hover { background: var(--lime); }
+
+  /* ----------- Manifesto strip ----------- */
+  .manifesto {
+    margin: 90px 0 0; padding: 36px 44px; background: var(--ink); color: var(--paper);
+    font-family: 'Boldonse', sans-serif; font-weight: 400;
+    font-size: clamp(28px, 3.4vw, 48px); line-height: 1.05; letter-spacing: -0.02em; text-transform: uppercase;
+    display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
+  }
+  .manifesto .acc-lime { color: var(--lime); }
+  .manifesto .acc-mag { color: var(--magenta); }
+  .manifesto .pill { display: inline-block; background: var(--paper); color: var(--ink); padding: 0 14px; }
+
+  /* ----------- Tech grid - magazine layout ----------- */
+  .tech { padding: 80px 44px 60px; }
+  .tech-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 40px; margin-bottom: 48px; border-bottom: 2px solid var(--ink); padding-bottom: 24px; }
+  .tech-head .num { font-family: 'Boldonse', sans-serif; font-size: 140px; line-height: 0.85; letter-spacing: -0.04em; }
+  .tech-head .num small { font-family: 'IBM Plex Mono', monospace; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; display: block; margin-bottom: 8px; }
+  .tech-head h2 { font-family: 'Boldonse', sans-serif; font-weight: 400; font-size: clamp(40px, 5vw, 76px); line-height: 0.95; letter-spacing: -0.03em; text-transform: uppercase; margin: 0; max-width: 18ch; text-align: right; }
+
+  .tech-list { display: flex; flex-direction: column; }
+  .tech-row {
+    display: grid; grid-template-columns: 80px 1fr 1.6fr 1fr; gap: 32px;
+    padding: 32px 0; border-bottom: 1px solid var(--ink);
+    align-items: start; position: relative;
+    transition: background .2s ease;
+  }
+  .tech-row:hover { background: var(--lime); }
+  .tech-row .idx { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px; letter-spacing: 0.1em; padding-top: 6px; }
+  .tech-row h3 { font-family: 'Boldonse', sans-serif; font-weight: 400; font-size: clamp(32px, 3.6vw, 56px); line-height: 0.95; letter-spacing: -0.03em; text-transform: uppercase; margin: 0; }
+  .tech-row p { font-size: 17px; line-height: 1.45; margin: 0; max-width: 50ch; }
+  .tech-row .tags { display: flex; flex-direction: column; gap: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding-top: 6px; }
+  .tech-row .tags span:before { content: "↳ "; color: var(--magenta); }
+  .tech-row[data-acc="lime"] h3 .acc { background: var(--lime); padding: 0 8px; }
+  .tech-row[data-acc="cobalt"] h3 .acc { color: var(--cobalt); }
+  .tech-row[data-acc="magenta"] h3 .acc { color: var(--magenta); font-family: 'DM Sans'; font-style: italic; font-weight: 700; }
+  .tech-row[data-acc="orange"] h3 .acc { background: var(--orange); padding: 0 8px; color: var(--paper); }
+  .tech-row[data-acc="dark"] h3 .acc { background: var(--ink); color: var(--paper); padding: 0 8px; }
+  .tech-row:hover h3 .acc { background: var(--ink); color: var(--lime); }
+
+  /* ----------- Demo (Polaroid + Receipt vibe) ----------- */
+  .demo { padding: 80px 44px; background: var(--ink); color: var(--paper); position: relative; }
+  .demo::before {
+    content: "DEMO · DEMO · DEMO · DEMO · DEMO · DEMO · ";
+    position: absolute; top: 0; left: 0; right: 0; padding: 8px 0; text-align: center;
+    background: var(--lime); color: var(--ink); font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.32em; font-weight: 600;
+    overflow: hidden; white-space: nowrap;
+  }
+  .demo-grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 56px; align-items: start; padding-top: 40px; }
+  .demo-left h2 { font-family: 'Boldonse', sans-serif; font-weight: 400; font-size: clamp(48px, 6vw, 96px); line-height: 0.9; letter-spacing: -0.03em; text-transform: uppercase; margin: 0 0 28px; }
+  .demo-left h2 .acc { background: var(--magenta); padding: 0 12px; color: var(--paper); }
+  .demo-left p { font-size: 17px; line-height: 1.55; max-width: 38ch; opacity: 0.85; }
+  .demo-left .checks { margin-top: 28px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 1.85; }
+  .demo-left .checks div::before { content: "[✓] "; color: var(--lime); }
+
+  /* receipt-style chat */
+  .receipt {
+    background: var(--paper); color: var(--ink);
+    padding: 24px 24px 0; transform: rotate(-0.5deg);
+    box-shadow: 12px 14px 0 var(--magenta), 24px 28px 0 var(--cobalt);
+    position: relative;
+    font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 1.55;
+    min-height: 540px;
+    display: flex; flex-direction: column;
+  }
+  .receipt::before {
+    content: ""; position: absolute; left: 0; right: 0; top: -10px; height: 12px;
+    background-image: linear-gradient(135deg, var(--paper) 25%, transparent 25%), linear-gradient(225deg, var(--paper) 25%, transparent 25%);
+    background-size: 14px 14px; background-position: 0 0, 7px 0;
+  }
+  .receipt::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -10px; height: 12px;
+    background-image: linear-gradient(45deg, var(--paper) 25%, transparent 25%), linear-gradient(-45deg, var(--paper) 25%, transparent 25%);
+    background-size: 14px 14px; background-position: 0 0, 7px 0;
+  }
+  .receipt .r-head { text-align: center; border-bottom: 2px dashed var(--ink); padding-bottom: 14px; margin-bottom: 18px; }
+  .receipt .r-head h4 { font-family: 'Boldonse', sans-serif; font-weight: 400; font-size: 18px; letter-spacing: 0.04em; text-transform: uppercase; margin: 0 0 4px; }
+  .receipt .r-head .sub { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.6; }
+  .receipt .r-body { flex: 1; overflow-y: auto; padding: 0 4px; max-height: 360px; }
+  .receipt .row { display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-start; }
+  .receipt .row .who { flex-shrink: 0; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; padding-top: 2px; min-width: 64px; }
+  .receipt .row.user .who { color: var(--cobalt); }
+  .receipt .row.bot .who { color: var(--magenta); }
+  .receipt .row .text { flex: 1; }
+  .receipt .row .text em { background: var(--lime); font-style: normal; padding: 0 3px; }
+  .receipt .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 0; border-top: 1px dashed var(--ink); }
+  .receipt .chip { font-size: 10px; padding: 4px 8px; border: 1px solid var(--ink); background: transparent; cursor: pointer; font-family: inherit; letter-spacing: 0.06em; text-transform: uppercase; }
+  .receipt .chip:hover { background: var(--ink); color: var(--paper); }
+  .receipt .r-input { display: flex; align-items: center; gap: 8px; padding: 12px 0 16px; border-top: 2px dashed var(--ink); margin-top: 8px; }
+  .receipt .r-input input { flex: 1; background: transparent; border: 0; outline: 0; font-family: inherit; font-size: 13px; padding: 4px 0; }
+  .receipt .r-input button { background: var(--ink); color: var(--lime); border: 0; padding: 8px 14px; font-family: inherit; font-size: 11px; letter-spacing: 0.1em; cursor: pointer; font-weight: 600; }
+  .receipt .r-input button:hover { background: var(--magenta); color: var(--paper); }
+  .receipt .total { border-top: 2px dashed var(--ink); padding-top: 10px; margin-top: 10px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.6; text-align: center; }
+
+  /* ----------- CTA / footer ----------- */
+  .footer-cta {
+    padding: 100px 44px; position: relative;
+    background: var(--lime);
+    border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink);
+  }
+  .footer-cta h2 {
+    font-family: 'Boldonse', sans-serif; font-weight: 400; font-size: clamp(70px, 11vw, 180px);
+    line-height: 0.88; letter-spacing: -0.04em; text-transform: uppercase; margin: 0 0 32px;
+  }
+  .footer-cta h2 .ital { font-style: italic; font-family: serif; color: var(--magenta); }
+  .footer-cta h2 .arrow { display: inline-block; margin-left: 12px; transform: translateY(-8px); }
+  .footer-cta .mail {
+    display: inline-flex; align-items: center; gap: 18px; padding: 22px 36px;
+    background: var(--ink); color: var(--lime); font-family: 'Boldonse', sans-serif; font-size: 28px;
+    text-decoration: none; letter-spacing: -0.01em; text-transform: lowercase;
+  }
+  .footer-cta .mail:hover { background: var(--magenta); color: var(--paper); }
+  .footer-meta {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; padding: 24px 44px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    background: var(--ink); color: var(--paper);
+  }
+  .footer-meta div:nth-child(2) { text-align: center; }
+  .footer-meta div:nth-child(3) { text-align: right; }
+
+</style>
+</head>
+<body>
+
+<div class="marquee-bar">
+  <div class="scroll">
+    <span data-i18n="mq1">AI agents in production</span><span class="lime">·</span>
+    <span>MCP servers</span><span class="lime">·</span>
+    <span>AWS Bedrock</span><span class="lime">·</span>
+    <span>AgentCore</span><span class="lime">·</span>
+    <span data-i18n="mq2">vector search</span><span class="lime">·</span>
+    <span>info@teamleader.se</span><span class="lime">·</span>
+    <span data-i18n="mq3">Stockholm</span><span class="lime">·</span>
+    <span data-i18n="mq4">since 2022</span><span class="lime">·</span>
+    <span data-i18n="mq1">AI agents in production</span><span class="lime">·</span>
+    <span>MCP servers</span><span class="lime">·</span>
+    <span>AWS Bedrock</span><span class="lime">·</span>
+    <span>AgentCore</span><span class="lime">·</span>
+  </div>
+</div>
+
+<nav class="top">
+  <div class="brand"><span class="dot"></span><b>TEAMLEADER</b><span class="tld">.SE</span></div>
+  <div class="nav-mid mono" data-i18n="navMid">// production AI engineering · Stockholm</div>
+  <div class="nav-right">
+    <div class="lang">
+      <button data-lang="en" class="on">EN</button>
+      <button data-lang="sv">SV</button>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-grid">
+    <div class="issue mono" data-i18n="issue">Issue №07 · MMXXVI · The Agents Issue</div>
+    <div class="issue-meta mono" data-i18n="issueMeta">For founders building real AI · not slides</div>
+
+    <h1 class="headline">
+      <span class="row" data-i18n-html="hl1">SKIP <span class="strike">THE DEMOS.</span></span>
+      <span class="row" data-i18n-html="hl2"><span class="ship">SHIP</span> THE <span class="magenta">agents.</span></span>
+    </h1>
+
+    <div class="lede-row">
+      <div class="col">
+        <h3 data-i18n="ledeH1">// who we are</h3>
+        <p data-i18n-html="ledeP1">A <b>small Swedish engineering team</b> turning AI prototypes into production systems that survive Monday morning.</p>
+      </div>
+      <div class="col">
+        <h3 data-i18n="ledeH2">// what we ship</h3>
+        <p data-i18n-html="ledeP2">MCP servers, Bedrock agents, AgentCore runtimes, vector retrieval. <b>Built to deploy</b>, not to demo.</p>
+      </div>
+      <div class="col">
+        <h3 data-i18n="ledeH3">// for whom</h3>
+        <p data-i18n-html="ledeP3">Founders who need a senior team for <b>6–10 weeks</b>, then a clean handover to in-house engineers.</p>
+      </div>
+    </div>
+
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#demo" data-i18n="cta1">▸ Run live demo</a>
+      <a class="btn btn-ghost" href="mailto:info@teamleader.se" data-i18n="cta2">✉ info@teamleader.se</a>
+    </div>
+  </div>
+</section>
+
+<div class="manifesto">
+  <span data-i18n="man1">We don't do</span>
+  <span class="pill" data-i18n="man2">slide decks</span>
+  <span class="acc-mag">→</span>
+  <span data-i18n="man3">we do</span>
+  <span class="acc-lime" data-i18n="man4">production code</span>
+  <span class="acc-mag">·</span>
+  <span data-i18n="man5">in your VPC</span>
+  <span class="acc-mag">·</span>
+  <span data-i18n="man6">with your data</span>
+</div>
+
+<section class="tech" id="stack">
+  <div class="tech-head">
+    <div class="num">06<small data-i18n="techSmall">// capabilities</small></div>
+    <h2 data-i18n-html="techTitle">THE STACK <span style="color: var(--cobalt)">WE</span> ACTUALLY KNOW.</h2>
+  </div>
+
+  <div class="tech-list">
+    <div class="tech-row" data-acc="lime">
+      <div class="idx mono">01</div>
+      <h3><span class="acc" data-i18n="t1h">MCP</span></h3>
+      <p data-i18n="t1p">Model Context Protocol servers that connect Claude, GPT and local models to your real tools — Postgres, Salesforce, Notion, internal APIs — with auth, audit and rate-limits as first-class concerns.</p>
+      <div class="tags mono"><span data-i18n="t1tag1">14 in production</span><span data-i18n="t1tag2">Anthropic · OpenAI</span></div>
+    </div>
+    <div class="tech-row" data-acc="cobalt">
+      <div class="idx mono">02</div>
+      <h3><span class="acc">AGENTCORE</span></h3>
+      <p data-i18n="t2p">AWS Bedrock AgentCore: managed runtime for autonomous agents — memory, identity, tools, traces, evals. We migrate hand-rolled Python loops to AgentCore in roughly two weeks.</p>
+      <div class="tags mono"><span data-i18n="t2tag1">launch partner</span><span data-i18n="t2tag2">migration · ops</span></div>
+    </div>
+    <div class="tech-row" data-acc="dark">
+      <div class="idx mono">03</div>
+      <h3><span class="acc">BEDROCK</span></h3>
+      <p data-i18n="t3p">Claude, Llama 3, Mistral and Titan running inside your own AWS account. We set up the VPC, IAM, Guardrails and CloudWatch tracing so no data leaks and everything is observable.</p>
+      <div class="tags mono"><span>VPC · KMS</span><span>eu-north-1</span></div>
+    </div>
+    <div class="tech-row" data-acc="magenta">
+      <div class="idx mono">04</div>
+      <h3><span class="acc">vector search</span></h3>
+      <p data-i18n="t4p">OpenSearch Serverless, pgvector, Pinecone. We index your docs with Bedrock or Cohere embeddings and tune chunking + hybrid retrieval until p95 latency lands under 100ms.</p>
+      <div class="tags mono"><span>p95 &lt; 100ms</span><span>hybrid retrieval</span></div>
+    </div>
+    <div class="tech-row" data-acc="orange">
+      <div class="idx mono">05</div>
+      <h3><span class="acc" data-i18n="t5h">AGENTS</span></h3>
+      <p data-i18n="t5p">Multi-step agents with tool selection, retries, hand-off, human-in-the-loop checkpoints. Not chatbots — operators that finish jobs and ask permission only when it matters.</p>
+      <div class="tags mono"><span data-i18n="t5tag1">LangGraph · custom loops</span><span data-i18n="t5tag2">eval-driven</span></div>
+    </div>
+    <div class="tech-row" data-acc="lime">
+      <div class="idx mono">06</div>
+      <h3><span class="acc" data-i18n="t6h">SKILLS &amp; EVALS</span></h3>
+      <p data-i18n="t6p">Reusable capability packs and the eval harnesses that keep them from regressing once they hit production. Because shipping is the first 10% — the other 90% is not breaking.</p>
+      <div class="tags mono"><span data-i18n="t6tag1">braintrust · langsmith</span><span data-i18n="t6tag2">CI evals</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="demo" id="demo">
+  <div class="demo-grid">
+    <div class="demo-left">
+      <h2 data-i18n-html="demoTitle">TRY THE <span class="acc">AGENT</span>.</h2>
+      <p data-i18n="demoSub">A small demo agent that lives in this page. It speaks the same loop as the production ones we ship — just with shorter answers and no AWS bill.</p>
+      <div class="checks">
+        <div data-i18n="dc1">MCP-style tool calls</div>
+        <div data-i18n="dc2">Streaming responses</div>
+        <div data-i18n="dc3">Bilingual: English &amp; Swedish</div>
+        <div data-i18n="dc4">200 lines, no dependencies</div>
+        <div data-i18n="dc5">Deploys to Railway in &lt; 5 minutes</div>
+      </div>
+    </div>
+
+    <div class="receipt">
+      <div class="r-head">
+        <h4 data-i18n="rHead">// TEAMLEADER AGENT</h4>
+        <div class="sub" data-i18n="rSub">RECEIPT · SESSION 7F-2A · CLAUDE SONNET 4.5</div>
+      </div>
+      <div class="r-body" id="rBody"></div>
+      <div class="chips" id="chipRow"></div>
+      <form class="r-input" id="rForm">
+        <span>›</span>
+        <input id="rInput" type="text" autocomplete="off" />
+        <button type="submit">SEND</button>
+      </form>
+      <div class="total" data-i18n="rTotal">— END OF RECEIPT — KEEP FOR YOUR RECORDS —</div>
+    </div>
+  </div>
+</section>
+
+<section class="footer-cta">
+  <h2 data-i18n-html="footTitle">LET'S<br/>BUILD<br/>SOMETHING <span class="ital">real.</span></h2>
+  <a class="mail" href="mailto:info@teamleader.se">info@teamleader.se →</a>
+</section>
+
+<div class="footer-meta">
+  <div>© 2026 TEAMLEADER.SE</div>
+  <div data-i18n="footMid">STOCKHOLM · SVERIGE</div>
+  <div data-i18n="footRight">BUILT ON RAILWAY · EU-NORTH-1</div>
+</div>
+
+<script>
+const i18n = {
+  en: {
+    mq1: "AI agents in production", mq2: "vector search", mq3: "Stockholm", mq4: "since 2022",
+    navMid: "// production AI engineering · Stockholm",
+    issue: "Issue №07 · MMXXVI · The Agents Issue",
+    issueMeta: "For founders building real AI · not slides",
+    hl1: 'SKIP <span class="strike">THE DEMOS.</span>',
+    hl2: '<span class="ship">SHIP</span> THE <span class="magenta">agents.</span>',
+    ledeH1: "// who we are", ledeP1: 'A <b>small Swedish engineering team</b> turning AI prototypes into production systems that survive Monday morning.',
+    ledeH2: "// what we ship", ledeP2: 'MCP servers, Bedrock agents, AgentCore runtimes, vector retrieval. <b>Built to deploy</b>, not to demo.',
+    ledeH3: "// for whom", ledeP3: 'Founders who need a senior team for <b>6–10 weeks</b>, then a clean handover to in-house engineers.',
+    cta1: "▸ Run live demo", cta2: "✉ info@teamleader.se",
+    man1: "We don't do", man2: "slide decks", man3: "we do", man4: "production code", man5: "in your VPC", man6: "with your data",
+    techSmall: "// capabilities",
+    techTitle: 'THE STACK <span style="color: var(--cobalt)">WE</span> ACTUALLY KNOW.',
+    t1h: "MCP", t1p: "Model Context Protocol servers that connect Claude, GPT and local models to your real tools — Postgres, Salesforce, Notion, internal APIs — with auth, audit and rate-limits as first-class concerns.",
+    t1tag1: "14 in production", t1tag2: "Anthropic · OpenAI",
+    t2p: "AWS Bedrock AgentCore: managed runtime for autonomous agents — memory, identity, tools, traces, evals. We migrate hand-rolled Python loops to AgentCore in roughly two weeks.",
+    t2tag1: "launch partner", t2tag2: "migration · ops",
+    t3p: "Claude, Llama 3, Mistral and Titan running inside your own AWS account. We set up the VPC, IAM, Guardrails and CloudWatch tracing so no data leaks and everything is observable.",
+    t4p: "OpenSearch Serverless, pgvector, Pinecone. We index your docs with Bedrock or Cohere embeddings and tune chunking + hybrid retrieval until p95 latency lands under 100ms.",
+    t5h: "AGENTS", t5p: "Multi-step agents with tool selection, retries, hand-off, human-in-the-loop checkpoints. Not chatbots — operators that finish jobs and ask permission only when it matters.",
+    t5tag1: "LangGraph · custom loops", t5tag2: "eval-driven",
+    t6h: "SKILLS & EVALS", t6p: "Reusable capability packs and the eval harnesses that keep them from regressing once they hit production. Because shipping is the first 10% — the other 90% is not breaking.",
+    t6tag1: "braintrust · langsmith", t6tag2: "CI evals",
+    demoTitle: 'TRY THE <span class="acc">AGENT</span>.',
+    demoSub: "A small demo agent that lives in this page. It speaks the same loop as the production ones we ship — just with shorter answers and no AWS bill.",
+    dc1: "MCP-style tool calls", dc2: "Streaming responses", dc3: "Bilingual: English & Swedish", dc4: "200 lines, no dependencies", dc5: "Deploys to Railway in < 5 minutes",
+    rHead: "// TEAMLEADER AGENT", rSub: "RECEIPT · SESSION 7F-2A · CLAUDE SONNET 4.5",
+    rTotal: "— END OF RECEIPT — KEEP FOR YOUR RECORDS —",
+    footTitle: 'LET\'S<br/>BUILD<br/>SOMETHING <span class="ital">real.</span>',
+    footMid: "STOCKHOLM · SVERIGE", footRight: "BUILT ON RAILWAY · EU-NORTH-1",
+    placeholder: "ask: what is mcp?",
+    chips: ["what is MCP?", "explain agentcore", "vector search", "pricing"],
+    botGreeting: "Hi — I'm a demo agent on this page. Ask about *MCP*, *AgentCore*, *Bedrock*, *vector search* or *pricing*.",
+    answers: {
+      mcp: "MCP = Anthropic's *Model Context Protocol*. We've shipped 14 MCP servers (Postgres, Salesforce, Notion, internal APIs). Auth, audit, rate-limits done right.",
+      agentcore: "*AgentCore* is AWS's managed agent runtime — memory, tools, traces, evals. We migrate Python loops to it in ~2 weeks.",
+      bedrock: "*Bedrock* runs Claude / Llama / Mistral / Titan inside your AWS account. We do the VPC, IAM, Guardrails plumbing.",
+      vector: "We index your docs into *OpenSearch* or *pgvector* with Bedrock embeddings, tune retrieval to p95 < 100ms.",
+      pricing: "Project-based, 6–10 weeks, fixed price. Mail *info@teamleader.se* for a quote within 48h.",
+      hello: "Try: *what is MCP?*, *explain agentcore*, *vector search* or *pricing*.",
+      fallback: "Small demo — only MCP, AgentCore, Bedrock, vector search, pricing. For more: *info@teamleader.se*."
+    }
+  },
+  sv: {
+    mq1: "AI-agenter i produktion", mq2: "vektorsökning", mq3: "Stockholm", mq4: "sedan 2022",
+    navMid: "// produktions-AI · Stockholm",
+    issue: "Nummer №07 · MMXXVI · Agent-numret",
+    issueMeta: "För grundare som bygger riktig AI · inte slides",
+    hl1: 'HOPPA <span class="strike">ÖVER DEMON.</span>',
+    hl2: '<span class="ship">SKEPPA</span> <span class="magenta">agenten.</span>',
+    ledeH1: "// vilka vi är", ledeP1: 'Ett <b>litet svenskt ingenjörsteam</b> som förvandlar AI-prototyper till produktionssystem som överlever måndag morgon.',
+    ledeH2: "// vad vi skeppar", ledeP2: 'MCP-servrar, Bedrock-agenter, AgentCore-runtimes, vektorsökning. <b>Byggt för drift</b>, inte demo.',
+    ledeH3: "// för vilka", ledeP3: 'Grundare som behöver ett senior-team i <b>6–10 veckor</b>, sedan ren överlämning till interna ingenjörer.',
+    cta1: "▸ Kör live-demo", cta2: "✉ info@teamleader.se",
+    man1: "Vi gör inte", man2: "pitchdecks", man3: "vi gör", man4: "produktionskod", man5: "i er VPC", man6: "med er data",
+    techSmall: "// kapabiliteter",
+    techTitle: 'STACKEN <span style="color: var(--cobalt)">VI</span> FAKTISKT KAN.',
+    t1h: "MCP", t1p: "MCP-servrar som kopplar Claude, GPT och lokala modeller till era riktiga verktyg — Postgres, Salesforce, Notion, interna API:er — med auth, audit och rate-limits inbyggt.",
+    t1tag1: "14 i produktion", t1tag2: "Anthropic · OpenAI",
+    t2p: "AWS Bedrock AgentCore: managed runtime för autonoma agenter — minne, identitet, verktyg, traces, evals. Vi migrerar handrullade Python-loopar dit på ungefär två veckor.",
+    t2tag1: "launch partner", t2tag2: "migration · drift",
+    t3p: "Claude, Llama 3, Mistral och Titan körs i ert eget AWS-konto. Vi sätter upp VPC, IAM, Guardrails och CloudWatch så inget läcker.",
+    t4p: "OpenSearch Serverless, pgvector, Pinecone. Vi indexerar era dokument med Bedrock- eller Cohere-embeddings och tunear chunking + hybrid retrieval till p95 < 100ms.",
+    t5h: "AGENTER", t5p: "Flerstegs-agenter med verktygsval, retries, hand-off och human-in-the-loop. Inte chatbots — operatörer som avslutar jobb och frågar bara när det spelar roll.",
+    t5tag1: "LangGraph · custom loops", t5tag2: "eval-drivet",
+    t6h: "SKILLS & EVALS", t6p: "Återanvändbara skill-paket och eval-rigg som hindrar regression i produktion. Att skeppa är de första 10% — de andra 90% är att inte gå sönder.",
+    t6tag1: "braintrust · langsmith", t6tag2: "CI-evals",
+    demoTitle: 'PROVA <span class="acc">AGENTEN</span>.',
+    demoSub: "En liten demoagent som körs på sidan. Samma loop som de riktiga vi skeppar — bara med kortare svar och utan AWS-faktura.",
+    dc1: "MCP-style tool calls", dc2: "Streamade svar", dc3: "Tvåspråkig: svenska & engelska", dc4: "200 rader, noll beroenden", dc5: "Deployar till Railway på < 5 min",
+    rHead: "// TEAMLEADER-AGENT", rSub: "KVITTO · SESSION 7F-2A · CLAUDE SONNET 4.5",
+    rTotal: "— SLUT PÅ KVITTO — SPARA FÖR DINA NOTERINGAR —",
+    footTitle: 'LÅT OSS<br/>BYGGA<br/>NÅGOT <span class="ital">riktigt.</span>',
+    footMid: "STOCKHOLM · SVERIGE", footRight: "BYGGT PÅ RAILWAY · EU-NORTH-1",
+    placeholder: "fråga: vad är mcp?",
+    chips: ["vad är MCP?", "förklara agentcore", "vektorsökning", "pris"],
+    botGreeting: "Hej — jag är en demoagent på den här sidan. Fråga om *MCP*, *AgentCore*, *Bedrock*, *vektorsökning* eller *pris*.",
+    answers: {
+      mcp: "MCP = Anthropics *Model Context Protocol*. Vi har skeppat 14 MCP-servrar (Postgres, Salesforce, Notion, interna API:er). Auth, audit, rate-limits gjort rätt.",
+      agentcore: "*AgentCore* är AWS managed agent-runtime — minne, verktyg, traces, evals. Vi migrerar Python-loopar dit på ~2 veckor.",
+      bedrock: "*Bedrock* kör Claude / Llama / Mistral / Titan i ert AWS-konto. Vi gör VPC, IAM, Guardrails-plumbing.",
+      vector: "Vi indexerar era dokument i *OpenSearch* eller *pgvector* med Bedrock-embeddings, tunear retrieval till p95 < 100ms.",
+      pricing: "Projektbaserat, 6–10 veckor, fast pris. Mejla *info@teamleader.se* för offert inom 48h.",
+      hello: "Prova: *vad är MCP?*, *förklara agentcore*, *vektorsökning* eller *pris*.",
+      fallback: "Liten demo — bara MCP, AgentCore, Bedrock, vektorsökning, pris. Mer info: *info@teamleader.se*."
+    }
+  }
+};
+
+let lang = localStorage.getItem('tl-lang') || 'en';
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  const t = i18n[lang];
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.getAttribute('data-i18n'); if (t[k] != null) el.textContent = t[k];
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    const k = el.getAttribute('data-i18n-html'); if (t[k] != null) el.innerHTML = t[k];
+  });
+  document.querySelectorAll('.lang button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+  rInput.placeholder = t.placeholder;
+  renderChips();
+}
+document.querySelectorAll('.lang button').forEach(b => b.addEventListener('click', () => {
+  lang = b.dataset.lang; localStorage.setItem('tl-lang', lang); applyLang();
+}));
+
+const rBody = document.getElementById('rBody');
+const chipRow = document.getElementById('chipRow');
+const rForm = document.getElementById('rForm');
+const rInput = document.getElementById('rInput');
+
+function fmt(s) { return s.replace(/\*([^*]+)\*/g, '<em>$1</em>').replace(/\n/g, '<br/>'); }
+function addMsg(who, body, opts={}) {
+  const div = document.createElement('div');
+  div.className = 'row ' + who;
+  const label = who === 'user' ? (lang==='sv'?'DU':'YOU') : 'AI';
+  div.innerHTML = `<span class="who">${label}</span><span class="text"></span>`;
+  rBody.appendChild(div);
+  const textEl = div.querySelector('.text');
+  if (opts.stream) {
+    let i = 0;
+    const tick = () => {
+      if (i <= body.length) {
+        textEl.innerHTML = fmt(body.slice(0, i));
+        rBody.scrollTop = rBody.scrollHeight;
+        i += Math.max(1, Math.round(body.length / 60));
+        setTimeout(tick, 18);
+      } else {
+        textEl.innerHTML = fmt(body);
+      }
+    };
+    tick();
+  } else {
+    textEl.innerHTML = fmt(body);
+  }
+  rBody.scrollTop = rBody.scrollHeight;
+}
+function answer(q) {
+  const t = i18n[lang].answers;
+  const s = q.toLowerCase();
+  if (/(^|\s)(hi|hello|hej|hallå|tjena|hey|help|hjälp)(\W|$)/.test(s)) return t.hello;
+  if (s.includes('mcp')) return t.mcp;
+  if (s.includes('agentcore') || s.includes('agent core')) return t.agentcore;
+  if (s.includes('bedrock')) return t.bedrock;
+  if (s.includes('vector') || s.includes('vektor') || s.includes('search') || s.includes('sök')) return t.vector;
+  if (s.includes('pris') || s.includes('pricing') || s.includes('cost') || s.includes('kostar')) return t.pricing;
+  return t.fallback;
+}
+function renderChips() {
+  chipRow.innerHTML = '';
+  i18n[lang].chips.forEach(c => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = c;
+    b.addEventListener('click', () => { rInput.value = c; rForm.dispatchEvent(new Event('submit', {cancelable: true})); });
+    chipRow.appendChild(b);
+  });
+}
+rForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const v = rInput.value.trim();
+  if (!v) return;
+  addMsg('user', v);
+  rInput.value = '';
+  setTimeout(() => addMsg('bot', answer(v), {stream: true}), 320);
+});
+
+applyLang();
+addMsg('bot', i18n[lang].botGreeting, {stream: true});
+</script>
+</body>
+</html>

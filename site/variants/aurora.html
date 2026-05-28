@@ -1,0 +1,801 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>teamleader.se — your AI stack, fully assembled</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07070d;
+    --bg-2: #0d0d18;
+    --ink: #ecedf3;
+    --ink-dim: #8a8da1;
+    --line: rgba(236,237,243,0.08);
+    --teal: #2bd4d9;
+    --indigo: #6366f1;
+    --magenta: #e94baf;
+    --gold: #ffb547;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    background:
+      radial-gradient(ellipse 80% 60% at 15% 5%, rgba(43,212,217,0.18), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 85% 20%, rgba(233,75,175,0.20), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 60% 80%, rgba(99,102,241,0.18), transparent 60%),
+      var(--bg);
+    min-height: 100vh;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* ----------- Grid bg ----------- */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse at 50% 30%, black 30%, transparent 80%);
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.4'/></svg>");
+    opacity: 0.04;
+  }
+
+  /* ----------- Nav ----------- */
+  nav.top {
+    position: relative; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 24px 48px; border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: 'JetBrains Mono', monospace; font-size: 14px; letter-spacing: 0.02em; font-weight: 600; }
+  .brand-mark {
+    width: 26px; height: 26px; position: relative;
+    background: conic-gradient(from 0deg, var(--teal), var(--indigo), var(--magenta), var(--teal));
+    border-radius: 6px;
+  }
+  .brand-mark::after { content: ""; position: absolute; inset: 4px; background: var(--bg); border-radius: 3px; }
+  .brand-mark::before { content: ""; position: absolute; inset: 9px; background: var(--ink); border-radius: 2px; z-index: 1; }
+  .brand b { font-weight: 600; }
+  .brand .sep { color: var(--ink-dim); }
+  .brand i { font-style: normal; color: var(--ink-dim); }
+
+  .nav-links { display: flex; gap: 28px; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .nav-links a { color: var(--ink-dim); text-decoration: none; }
+  .nav-links a:hover { color: var(--ink); }
+
+  .nav-right { display: flex; align-items: center; gap: 16px; }
+  .lang { display: flex; background: rgba(255,255,255,0.04); border-radius: 6px; padding: 3px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .lang button { border: 0; background: transparent; padding: 5px 10px; border-radius: 4px; color: var(--ink-dim); cursor: pointer; font-family: inherit; font-size: inherit; letter-spacing: 0.04em; }
+  .lang button.on { background: var(--ink); color: var(--bg); }
+
+  /* ----------- Hero ----------- */
+  .hero {
+    position: relative; z-index: 2;
+    padding: 80px 48px 100px;
+    display: grid; grid-template-columns: 1.1fr 1fr; gap: 64px; align-items: center;
+  }
+  .eyebrow { display: inline-flex; align-items: center; gap: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-dim); margin-bottom: 28px; letter-spacing: 0.06em; }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 12px var(--teal); }
+  .eyebrow b { color: var(--teal); font-weight: 500; }
+
+  h1.headline {
+    font-family: 'Space Grotesk', sans-serif; font-weight: 500;
+    font-size: clamp(56px, 7vw, 96px); line-height: 0.98; letter-spacing: -0.035em;
+    margin: 0 0 28px;
+  }
+  h1.headline .grad {
+    background: linear-gradient(95deg, var(--teal) 0%, var(--indigo) 45%, var(--magenta) 95%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub { font-size: 19px; line-height: 1.55; color: var(--ink-dim); max-width: 46ch; margin: 0 0 36px; }
+
+  .cta-row { display: flex; gap: 14px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 14px 22px; border-radius: 10px; font-family: 'Space Grotesk', sans-serif; font-weight: 500; font-size: 15px;
+    text-decoration: none; cursor: pointer; border: 0; transition: all .2s ease;
+  }
+  .btn-primary { background: var(--ink); color: var(--bg); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 12px 32px -8px rgba(43,212,217,0.4); }
+  .btn-ghost { background: rgba(255,255,255,0.04); color: var(--ink); border: 1px solid var(--line); }
+  .btn-ghost:hover { background: rgba(255,255,255,0.08); }
+
+  .stack-vis {
+    position: relative; aspect-ratio: 1/1; max-width: 540px; justify-self: end;
+  }
+  .stack-vis svg { width: 100%; height: 100%; }
+
+  /* ----------- Logos rail ----------- */
+  .rail {
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    padding: 22px 48px; display: flex; align-items: center; gap: 40px; flex-wrap: wrap;
+    position: relative; z-index: 2;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-dim);
+  }
+  .rail .label { color: var(--ink-dim); letter-spacing: 0.12em; text-transform: uppercase; margin-right: 8px; }
+  .rail .pill { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); background: rgba(255,255,255,0.02); }
+
+  /* ----------- Tech grid ----------- */
+  .tech { padding: 100px 48px 80px; position: relative; z-index: 2; }
+  .section-head { margin-bottom: 56px; }
+  .section-head .label { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--teal); letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 18px; }
+  .section-head h2 { font-family: 'Space Grotesk', sans-serif; font-weight: 500; font-size: 64px; line-height: 1; letter-spacing: -0.03em; margin: 0; max-width: 18ch; }
+  .section-head h2 .grad { background: linear-gradient(95deg, var(--teal), var(--indigo), var(--magenta)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  .tech-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+    border: 1px solid var(--line); border-radius: 18px; padding: 28px;
+    position: relative; overflow: hidden;
+    transition: border-color .2s ease, transform .2s ease;
+  }
+  .card:hover { border-color: rgba(255,255,255,0.18); transform: translateY(-2px); }
+  .card .icon {
+    width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center;
+    background: linear-gradient(135deg, rgba(43,212,217,0.16), rgba(233,75,175,0.16));
+    border: 1px solid var(--line);
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 14px;
+    margin-bottom: 24px;
+  }
+  .card h3 { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 22px; line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 10px; }
+  .card p { margin: 0; color: var(--ink-dim); font-size: 14px; line-height: 1.55; }
+  .card .meta { margin-top: 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim); display: flex; justify-content: space-between; }
+  .card .meta b { color: var(--teal); font-weight: 500; }
+
+  .card.span-6 { grid-column: span 6; }
+  .card.span-4 { grid-column: span 4; }
+  .card.span-3 { grid-column: span 3; }
+
+  .card.hero-card {
+    background:
+      radial-gradient(circle at 80% 20%, rgba(233,75,175,0.25), transparent 50%),
+      radial-gradient(circle at 20% 80%, rgba(43,212,217,0.25), transparent 50%),
+      var(--bg-2);
+    border: 1px solid rgba(255,255,255,0.16);
+  }
+  .card.hero-card .icon { background: linear-gradient(135deg, var(--teal), var(--indigo)); border: 0; color: var(--bg); }
+  .card.hero-card h3 { font-size: 28px; }
+
+  /* ----------- Demo ----------- */
+  .demo { padding: 100px 48px; position: relative; z-index: 2; }
+  .demo-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 40px; margin-bottom: 48px; }
+  .demo-head h2 { font-family: 'Space Grotesk', sans-serif; font-weight: 500; font-size: 64px; line-height: 1; letter-spacing: -0.03em; margin: 0; max-width: 18ch; }
+  .demo-head h2 .grad { background: linear-gradient(95deg, var(--teal), var(--magenta)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .demo-head p { font-size: 16px; color: var(--ink-dim); max-width: 40ch; margin: 0; }
+
+  .chat-panel {
+    background: var(--bg-2); border: 1px solid var(--line); border-radius: 20px; overflow: hidden;
+    display: grid; grid-template-columns: 280px 1fr; min-height: 540px;
+    box-shadow: 0 40px 80px -30px rgba(43,212,217,0.25);
+  }
+  .chat-side { background: rgba(255,255,255,0.02); border-right: 1px solid var(--line); padding: 22px; display: flex; flex-direction: column; gap: 18px; }
+  .chat-side h4 { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); margin: 0 0 4px; font-weight: 500; }
+  .trace-list { display: flex; flex-direction: column; gap: 2px; }
+  .trace-step {
+    display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; padding: 8px 10px;
+    border-left: 2px solid transparent; border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim);
+    cursor: pointer; transition: color .2s ease, background .2s ease, border-color .2s ease;
+    align-items: center;
+  }
+  .trace-step:hover { background: rgba(255,255,255,0.03); color: var(--ink); }
+  .trace-step .ts-idx { font-size: 10px; opacity: 0.55; }
+  .trace-step .ts-name { letter-spacing: 0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trace-step .ts-time { color: var(--ink-dim); font-size: 10px; }
+  .trace-step.done { color: var(--ink); }
+  .trace-step.done .ts-time { color: var(--teal); }
+  .trace-step.active {
+    border-left-color: var(--teal); color: var(--teal);
+    background: rgba(43,212,217,0.10);
+  }
+  .trace-step.active .ts-time { color: var(--teal); }
+
+  .trace-footer { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--line); }
+  .real-link {
+    display: flex; gap: 12px; align-items: center; text-decoration: none; color: var(--ink);
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.4;
+    padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);
+    background: linear-gradient(135deg, rgba(43,212,217,0.06), rgba(233,75,175,0.06));
+    transition: border-color .2s ease, transform .2s ease;
+  }
+  .real-link:hover { border-color: var(--teal); transform: translateY(-1px); }
+  .real-link .arrow { color: var(--magenta); font-size: 18px; flex-shrink: 0; }
+  .real-link b { color: var(--ink); font-weight: 500; display: block; margin-bottom: 2px; }
+  .real-link .url { color: var(--ink-dim); font-size: 10.5px; }
+
+  .chat-main { display: flex; flex-direction: column; }
+  .chat-bar { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--line); font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-dim); }
+  .chat-bar .session { display: flex; gap: 14px; align-items: center; }
+  .chat-bar .session .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 8px var(--teal); }
+  .chat-bar .model { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); }
+
+  .chat-body { flex: 1; overflow-y: auto; padding: 24px; max-height: 380px; }
+  .msg { margin-bottom: 18px; display: flex; gap: 12px; align-items: flex-start; }
+  .msg .avatar { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; font-family: 'JetBrains Mono', monospace; font-size: 11px; display: grid; place-items: center; font-weight: 600; }
+  .msg.user .avatar { background: rgba(255,255,255,0.06); color: var(--ink); }
+  .msg.bot .avatar { background: linear-gradient(135deg, var(--teal), var(--magenta)); color: var(--bg); }
+  .msg .content { flex: 1; }
+  .msg .content .meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .msg .content .body { font-size: 14px; line-height: 1.55; color: var(--ink); white-space: pre-wrap; }
+  .msg .content .body em { color: var(--teal); font-style: normal; font-weight: 500; }
+  .msg .toolcall {
+    margin-top: 10px; padding: 10px 14px; border: 1px dashed var(--line); border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim);
+  }
+  .msg .toolcall b { color: var(--magenta); font-weight: 500; }
+
+  .replay-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 20px; border-top: 1px solid var(--line);
+    background: rgba(255,255,255,0.015);
+  }
+  .replay-btn {
+    background: linear-gradient(95deg, var(--teal), var(--magenta)); color: var(--bg); border: 0;
+    padding: 10px 18px; border-radius: 8px; font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 600; cursor: pointer; letter-spacing: 0.06em;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: transform .15s ease, opacity .15s ease;
+  }
+  .replay-btn:hover { transform: translateY(-1px); }
+  .replay-btn:disabled { opacity: 0.45; cursor: progress; transform: none; }
+  .trace-meta { color: var(--ink-dim); font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+
+  .json-box {
+    margin-top: 12px; padding: 14px 16px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: rgba(0,0,0,0.32);
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.6;
+    overflow-x: auto; white-space: pre; color: var(--ink);
+  }
+  .json-box .j-head {
+    color: var(--ink-dim); margin-bottom: 10px; padding-bottom: 8px;
+    border-bottom: 1px dashed var(--line);
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    white-space: normal;
+  }
+  .json-box .j-head b { color: var(--magenta); font-weight: 500; }
+  .json-box .j-head .ok { color: var(--teal); }
+  .json-box .k { color: #8ab4ff; }
+  .json-box .s { color: #ffb547; }
+  .json-box .n { color: var(--teal); }
+  .json-box .b { color: #c084fc; }
+  .json-box .p { color: var(--ink-dim); }
+
+  .msg.tool .avatar { background: linear-gradient(135deg, var(--magenta), var(--gold)); color: var(--bg); }
+  .msg.system .avatar { background: rgba(255,255,255,0.05); color: var(--ink-dim); }
+  .msg.system .content .meta { color: var(--ink-dim); }
+  code.inline { background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; color: var(--teal); }
+
+  /* ----------- CTA / footer ----------- */
+  .footer-cta { padding: 120px 48px 60px; position: relative; z-index: 2; text-align: center; }
+  .footer-cta h2 { font-family: 'Space Grotesk', sans-serif; font-weight: 500; font-size: clamp(56px, 7vw, 96px); line-height: 1; letter-spacing: -0.035em; margin: 0 0 36px; }
+  .footer-cta h2 .grad { background: linear-gradient(95deg, var(--teal), var(--indigo), var(--magenta)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .footer-cta .mail {
+    display: inline-flex; align-items: center; gap: 14px; padding: 18px 32px; border-radius: 999px;
+    background: var(--ink); color: var(--bg); text-decoration: none; font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 18px;
+  }
+  .footer-cta .mail:hover { background: linear-gradient(95deg, var(--teal), var(--magenta)); }
+  .footer-meta { display: flex; justify-content: space-between; padding: 24px 48px 32px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--ink-dim); letter-spacing: 0.06em; border-top: 1px solid var(--line); margin-top: 80px; }
+
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="brand">
+    <span class="brand-mark"></span>
+    <b>teamleader</b><span class="sep">/</span><i>se</i>
+  </div>
+  <div class="nav-links mono">
+    <a href="#stack" data-i18n="navStack">stack</a>
+    <a href="#demo" data-i18n="navDemo">demo</a>
+    <a href="mailto:info@teamleader.se" data-i18n="navContact">contact</a>
+  </div>
+  <div class="nav-right">
+    <div class="lang">
+      <button data-lang="en" class="on">EN</button>
+      <button data-lang="sv">SV</button>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div>
+    <div class="eyebrow"><span class="dot"></span><b data-i18n="status">deploying</b><span data-i18n="eyebrow">· AWS · MCP · agents · Stockholm</span></div>
+    <h1 class="headline" data-i18n-html="headline">Your AI stack,<br/><span class="grad">fully assembled.</span></h1>
+    <p class="sub" data-i18n="sub">From MCP servers and Bedrock guardrails to AgentCore runtimes and vector retrieval — we engineer the entire production stack, then hand it back to your team running on AWS.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#demo"><span data-i18n="cta1">Run the live demo</span> →</a>
+      <a class="btn btn-ghost" href="mailto:info@teamleader.se"><span data-i18n="cta2">info@teamleader.se</span></a>
+    </div>
+  </div>
+
+  <div class="stack-vis">
+    <svg viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#2bd4d9"/><stop offset="1" stop-color="#6366f1"/>
+        </linearGradient>
+        <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#e94baf"/>
+        </linearGradient>
+        <linearGradient id="g3" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#e94baf"/><stop offset="1" stop-color="#ffb547"/>
+        </linearGradient>
+      </defs>
+
+      <!-- layers from top to bottom -->
+      <g transform="translate(60 60)">
+        <rect x="0" y="0" width="280" height="46" rx="10" fill="url(#g1)" opacity="0.18"/>
+        <rect x="0" y="0" width="280" height="46" rx="10" stroke="url(#g1)" stroke-width="1.5"/>
+        <text x="16" y="29" font-family="JetBrains Mono" font-size="13" fill="#2bd4d9" font-weight="600">AGENT  ·  Claude · GPT · Llama</text>
+        <circle cx="262" cy="23" r="4" fill="#2bd4d9"/>
+
+        <rect x="0" y="60" width="280" height="46" rx="10" fill="url(#g2)" opacity="0.18"/>
+        <rect x="0" y="60" width="280" height="46" rx="10" stroke="url(#g2)" stroke-width="1.5"/>
+        <text x="16" y="89" font-family="JetBrains Mono" font-size="13" fill="#a78bfa" font-weight="600">MCP  ·  tools · auth · audit</text>
+        <circle cx="262" cy="83" r="4" fill="#a78bfa"/>
+
+        <rect x="0" y="120" width="280" height="46" rx="10" fill="url(#g2)" opacity="0.18"/>
+        <rect x="0" y="120" width="280" height="46" rx="10" stroke="url(#g2)" stroke-width="1.5"/>
+        <text x="16" y="149" font-family="JetBrains Mono" font-size="13" fill="#c084fc" font-weight="600">AGENTCORE  ·  memory · traces</text>
+        <circle cx="262" cy="143" r="4" fill="#c084fc"/>
+
+        <rect x="0" y="180" width="280" height="46" rx="10" fill="url(#g3)" opacity="0.18"/>
+        <rect x="0" y="180" width="280" height="46" rx="10" stroke="url(#g3)" stroke-width="1.5"/>
+        <text x="16" y="209" font-family="JetBrains Mono" font-size="13" fill="#e94baf" font-weight="600">BEDROCK  ·  guardrails · VPC</text>
+        <circle cx="262" cy="203" r="4" fill="#e94baf"/>
+
+        <rect x="0" y="240" width="280" height="46" rx="10" fill="url(#g3)" opacity="0.18"/>
+        <rect x="0" y="240" width="280" height="46" rx="10" stroke="url(#g3)" stroke-width="1.5"/>
+        <text x="16" y="269" font-family="JetBrains Mono" font-size="13" fill="#ffb547" font-weight="600">VECTOR  ·  OpenSearch · pgvector</text>
+        <circle cx="262" cy="263" r="4" fill="#ffb547"/>
+
+        <!-- connectors -->
+        <path d="M40 46 L40 60 M120 46 L120 60 M200 46 L200 60" stroke="#2bd4d9" stroke-width="1" opacity="0.4" stroke-dasharray="2 3"/>
+        <path d="M40 106 L40 120 M120 106 L120 120 M200 106 L200 120" stroke="#a78bfa" stroke-width="1" opacity="0.4" stroke-dasharray="2 3"/>
+        <path d="M40 166 L40 180 M120 166 L120 180 M200 166 L200 180" stroke="#c084fc" stroke-width="1" opacity="0.4" stroke-dasharray="2 3"/>
+        <path d="M40 226 L40 240 M120 226 L120 240 M200 226 L200 240" stroke="#e94baf" stroke-width="1" opacity="0.4" stroke-dasharray="2 3"/>
+      </g>
+
+      <!-- AWS rail bottom -->
+      <g transform="translate(60 360)">
+        <text x="0" y="0" font-family="JetBrains Mono" font-size="11" fill="#8a8da1" letter-spacing="0.1em">// AWS · eu-north-1 · stockholm</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<div class="rail">
+  <span class="label" data-i18n="railLabel">// working with</span>
+  <span class="pill">AWS Bedrock</span>
+  <span class="pill">AgentCore</span>
+  <span class="pill">Anthropic MCP</span>
+  <span class="pill">OpenSearch</span>
+  <span class="pill">pgvector</span>
+  <span class="pill">Claude · GPT · Llama</span>
+  <span class="pill">LangGraph</span>
+  <span class="pill">Terraform</span>
+</div>
+
+<section class="tech" id="stack">
+  <div class="section-head">
+    <div class="label" data-i18n="techLabel">// 06 capabilities</div>
+    <h2 data-i18n-html="techTitle">We bring the <span class="grad">whole stack</span>, not the slide deck.</h2>
+  </div>
+
+  <div class="tech-grid">
+    <div class="card hero-card span-6">
+      <div class="icon">M</div>
+      <h3 data-i18n="t1h">MCP servers</h3>
+      <p data-i18n="t1p">Production Model Context Protocol servers that let Claude, GPT and local models call your real tools — Postgres, Salesforce, internal APIs — with auth, audit, and rate-limits.</p>
+      <div class="meta"><span data-i18n="t1m1">14 servers in production</span><b data-i18n="t1m2">Anthropic · OpenAI</b></div>
+    </div>
+    <div class="card span-6">
+      <div class="icon">A</div>
+      <h3 data-i18n="t2h">AWS Bedrock AgentCore</h3>
+      <p data-i18n="t2p">Managed runtime for autonomous agents on AWS — memory, identity, tools, traces, evals. We migrate your hand-rolled loops in 2 weeks.</p>
+      <div class="meta"><span data-i18n="t2m1">migration · runtime · ops</span><b data-i18n="t2m2">launch partner</b></div>
+    </div>
+
+    <div class="card span-3">
+      <div class="icon">B</div>
+      <h3 data-i18n="t3h">Bedrock models</h3>
+      <p data-i18n="t3p">Claude, Llama 3, Mistral and Titan inside your VPC. Guardrails, KMS, CloudWatch — done right.</p>
+    </div>
+    <div class="card span-3">
+      <div class="icon">V</div>
+      <h3 data-i18n="t4h">Vector search</h3>
+      <p data-i18n="t4p">OpenSearch Serverless, pgvector, Pinecone. p95 retrieval &lt; 100ms or your money back.</p>
+    </div>
+    <div class="card span-3">
+      <div class="icon">O</div>
+      <h3 data-i18n="t5h">Orchestration</h3>
+      <p data-i18n="t5p">Multi-step agents with tool selection, retries, hand-off, human-in-the-loop checkpoints.</p>
+    </div>
+    <div class="card span-3">
+      <div class="icon">E</div>
+      <h3 data-i18n="t6h">Skills &amp; evals</h3>
+      <p data-i18n="t6p">Reusable capability packs and the eval harnesses that keep agents from regressing.</p>
+    </div>
+  </div>
+</section>
+
+<section class="demo" id="demo">
+  <div class="demo-head">
+    <div>
+      <div class="label mono" style="color: var(--magenta); letter-spacing: 0.14em; font-size: 12px; text-transform: uppercase; margin-bottom: 14px;" data-i18n="demoLabel">// recorded trace · lunchguide.mcp</div>
+      <h2 data-i18n-html="demoTitle">An MCP we built. <span class="grad">Replayed.</span></h2>
+    </div>
+    <p data-i18n-html="demoSub">Captured trace from our <code class="inline">lunchguide</code> MCP server. Same wire protocol Claude uses to talk to your tools — no tokens consumed, just the JSON.</p>
+  </div>
+
+  <div class="chat-panel">
+    <aside class="chat-side">
+      <h4 data-i18n="sideTrace">// trace timeline</h4>
+      <div class="trace-list" id="traceList"></div>
+      <div class="trace-footer">
+        <a class="real-link" href="https://teamleader.se/lunchguide" target="_blank" rel="noreferrer">
+          <span class="arrow">↗</span>
+          <span><b data-i18n="realLinkB">Try the real one</b><span class="url">teamleader.se/lunchguide</span></span>
+        </a>
+      </div>
+    </aside>
+    <div class="chat-main">
+      <div class="chat-bar">
+        <div class="session"><span class="dot"></span><span id="traceStatus" data-i18n="statusRun">▶ replay running…</span></div>
+        <div class="model" data-i18n="endpoint">POST /lunchguide/mcp · v1</div>
+      </div>
+      <div class="chat-body" id="chatBody"></div>
+      <div class="replay-bar">
+        <button class="replay-btn" id="replayBtn"><span>▶</span><span data-i18n="replay">Replay trace</span></button>
+        <span class="trace-meta" id="traceMeta" data-i18n="traceMeta">5 events · 312 ms · 1 tool call</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="footer-cta">
+  <h2 data-i18n-html="footTitle"><span class="grad">Build with us.</span><br/>Ship in weeks, not quarters.</h2>
+  <a class="mail" href="mailto:info@teamleader.se">info@teamleader.se →</a>
+</section>
+<div class="footer-meta">
+  <span>© 2026 teamleader.se</span>
+  <span data-i18n="footMeta">Stockholm · Sweden · eu-north-1</span>
+</div>
+
+<script>
+const i18n = {
+  en: {
+    navStack: "stack", navDemo: "demo", navContact: "contact",
+    status: "deploying", eyebrow: " · AWS · MCP · agents · Stockholm",
+    headline: 'Your AI stack,<br/><span class="grad">fully assembled.</span>',
+    sub: "From MCP servers and Bedrock guardrails to AgentCore runtimes and vector retrieval — we engineer the entire production stack, then hand it back to your team running on AWS.",
+    cta1: "Watch the MCP trace", cta2: "info@teamleader.se",
+    railLabel: "// working with",
+    techLabel: "// 06 capabilities",
+    techTitle: 'We bring the <span class="grad">whole stack</span>, not the slide deck.',
+    t1h: "MCP servers", t1p: "Production Model Context Protocol servers that let Claude, GPT and local models call your real tools — Postgres, Salesforce, internal APIs — with auth, audit, and rate-limits.",
+    t1m1: "14 servers in production", t1m2: "Anthropic · OpenAI",
+    t2h: "AWS Bedrock AgentCore", t2p: "Managed runtime for autonomous agents on AWS — memory, identity, tools, traces, evals. We migrate your hand-rolled loops in 2 weeks.",
+    t2m1: "migration · runtime · ops", t2m2: "launch partner",
+    t3h: "Bedrock models", t3p: "Claude, Llama 3, Mistral and Titan inside your VPC. Guardrails, KMS, CloudWatch — done right.",
+    t4h: "Vector search", t4p: "OpenSearch Serverless, pgvector, Pinecone. p95 retrieval < 100ms or your money back.",
+    t5h: "Orchestration", t5p: "Multi-step agents with tool selection, retries, hand-off, human-in-the-loop checkpoints.",
+    t6h: "Skills & evals", t6p: "Reusable capability packs and the eval harnesses that keep agents from regressing.",
+    demoLabel: "// recorded trace · lunchguide.mcp",
+    demoTitle: 'An MCP we built. <span class="grad">Replayed.</span>',
+    demoSub: 'Captured trace from our <code class="inline">lunchguide</code> MCP server. Same wire protocol Claude uses to talk to your tools — no tokens consumed, just the JSON.',
+    sideTrace: "// trace timeline", realLinkB: "Try the real one",
+    statusRun: "▶ replay running…", statusDone: "✓ trace complete · 312 ms",
+    endpoint: "POST /lunchguide/mcp · v1", replay: "Replay trace",
+    traceMeta: "5 events · 312 ms · 1 tool call",
+    stepNames: ["user_query", "assistant_plan", "tool_call · search_today", "tool_result · 200 OK", "assistant_message"],
+    traceUser: "What's for lunch in Vasastan today?",
+    tracePlan: "I'll search the *lunchguide* MCP for today's menus in Vasastan. Calling *search_today*…",
+    traceAnswer: "Here's today's lunch in Vasastan:\n• *Tranan* — Köttbullar med potatismos · 145 kr — classic\n• *Tennstopet* — Wallenbergare · 165 kr\n• *Cyrano* — Pizza Bianca · 135 kr — cheapest\n• *Lilla Ego* — Dagens fisk · 195 kr — premium\n\nWant me to pull up a full menu for any of these?",
+    metaYou: "user", metaAgent: "tl-agent", metaToolCall: "tool_call", metaToolResult: "tool_result",
+    footTitle: '<span class="grad">Build with us.</span><br/>Ship in weeks, not quarters.',
+    footMeta: "Stockholm · Sweden · eu-north-1",
+    placeholderRemoved: ""
+  },
+  sv: {
+    navStack: "stack", navDemo: "demo", navContact: "kontakt",
+    status: "deployar", eyebrow: " · AWS · MCP · agenter · Stockholm",
+    headline: 'Din AI-stack,<br/><span class="grad">fullt monterad.</span>',
+    sub: "Från MCP-servrar och Bedrock-guardrails till AgentCore-runtimes och vektorsökning — vi bygger hela produktionsstacken och lämnar över den körandes på AWS.",
+    cta1: "Se MCP-tracen", cta2: "info@teamleader.se",
+    railLabel: "// vi jobbar med",
+    techLabel: "// 06 kapabiliteter",
+    techTitle: 'Vi levererar <span class="grad">hela stacken</span>, inte en pitchdeck.',
+    t1h: "MCP-servrar", t1p: "MCP-servrar i produktion som låter Claude, GPT och lokala modeller anropa era riktiga verktyg — Postgres, Salesforce, interna API:er — med auth, audit och rate-limits.",
+    t1m1: "14 servrar i produktion", t1m2: "Anthropic · OpenAI",
+    t2h: "AWS Bedrock AgentCore", t2p: "Managed runtime för autonoma agenter på AWS — minne, identitet, verktyg, traces, evals. Vi migrerar era handrullade loopar på 2 veckor.",
+    t2m1: "migration · runtime · drift", t2m2: "launch partner",
+    t3h: "Bedrock-modeller", t3p: "Claude, Llama 3, Mistral och Titan i er VPC. Guardrails, KMS, CloudWatch — gjort rätt.",
+    t4h: "Vektorsökning", t4p: "OpenSearch Serverless, pgvector, Pinecone. p95-retrieval < 100ms eller pengarna tillbaka.",
+    t5h: "Orkestrering", t5p: "Flerstegs-agenter med verktygsval, retries, hand-off och human-in-the-loop.",
+    t6h: "Skills & evals", t6p: "Återanvändbara skill-paket och eval-rigg som hindrar regression.",
+    demoLabel: "// inspelad trace · lunchguide.mcp",
+    demoTitle: 'En MCP vi byggt. <span class="grad">Återuppspelad.</span>',
+    demoSub: 'Fångad trace från vår <code class="inline">lunchguide</code>-MCP. Samma wire-protokoll som Claude använder för att prata med era verktyg — inga tokens, bara JSON.',
+    sideTrace: "// trace-tidslinje", realLinkB: "Testa på riktigt",
+    statusRun: "▶ spelar upp…", statusDone: "✓ trace klar · 312 ms",
+    endpoint: "POST /lunchguide/mcp · v1", replay: "Spela upp igen",
+    traceMeta: "5 events · 312 ms · 1 tool-call",
+    stepNames: ["user_query", "assistant_plan", "tool_call · search_today", "tool_result · 200 OK", "assistant_message"],
+    traceUser: "Vad är bra för lunch i Vasastan idag?",
+    tracePlan: "Jag söker i *lunchguide*-MCP:n efter dagens menyer i Vasastan. Anropar *search_today*…",
+    traceAnswer: "Här är dagens lunch i Vasastan:\n• *Tranan* — Köttbullar med potatismos · 145 kr — klassiker\n• *Tennstopet* — Wallenbergare · 165 kr\n• *Cyrano* — Pizza Bianca · 135 kr — billigast\n• *Lilla Ego* — Dagens fisk · 195 kr — premium\n\nVill du se hela menyn för någon av dem?",
+    metaYou: "user", metaAgent: "tl-agent", metaToolCall: "tool_call", metaToolResult: "tool_result",
+    footTitle: '<span class="grad">Bygg med oss.</span><br/>Skeppa på veckor, inte kvartal.',
+    footMeta: "Stockholm · Sverige · eu-north-1",
+    placeholderRemoved: ""
+  }
+};
+
+let lang = localStorage.getItem('tl-lang') || 'en';
+
+const chatBody    = document.getElementById('chatBody');
+const traceList   = document.getElementById('traceList');
+const traceStatus = document.getElementById('traceStatus');
+const replayBtn   = document.getElementById('replayBtn');
+
+/* The MCP payload — language-agnostic data on the wire */
+const TOOL_CALL = {
+  jsonrpc: "2.0",
+  id: 7,
+  method: "tools/call",
+  params: {
+    name: "search_today",
+    arguments: { area: "Vasastan", date: "2026-05-28", max_results: 5 }
+  }
+};
+const TOOL_RESULT = {
+  jsonrpc: "2.0",
+  id: 7,
+  result: {
+    restaurants: [
+      { id: "tranan",     name: "Tranan",     dish: "Köttbullar med potatismos", price_sek: 145 },
+      { id: "tennstopet", name: "Tennstopet", dish: "Wallenbergare",             price_sek: 165 },
+      { id: "cyrano",     name: "Cyrano",     dish: "Pizza Bianca",              price_sek: 135 },
+      { id: "lillaego",   name: "Lilla Ego",  dish: "Dagens fisk",               price_sek: 195 }
+    ],
+    count: 4,
+    cached: false,
+    latency_ms: 68
+  }
+};
+const STEP_TIMES = ["12:43:01.041", "12:43:01.218", "12:43:01.226", "12:43:01.294", "12:43:01.353"];
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  const t = i18n[lang];
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.getAttribute('data-i18n'); if (t[k] != null) el.textContent = t[k];
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    const k = el.getAttribute('data-i18n-html'); if (t[k] != null) el.innerHTML = t[k];
+  });
+  document.querySelectorAll('.lang button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+  renderTrace();
+  if (!replayRan) return;
+  // Re-render trace messages in new language without re-animating
+  jumpToEnd();
+}
+document.querySelectorAll('.lang button').forEach(b => b.addEventListener('click', () => {
+  lang = b.dataset.lang; localStorage.setItem('tl-lang', lang); applyLang();
+}));
+
+/* ---------- helpers ---------- */
+function fmt(s) {
+  return s
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br/>');
+}
+function escStr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '\\"');
+}
+function prettyJson(v, depth) {
+  const pad = '  '.repeat(depth);
+  const padNext = '  '.repeat(depth + 1);
+  if (v === null) return '<span class="b">null</span>';
+  if (typeof v === 'boolean') return `<span class="b">${v}</span>`;
+  if (typeof v === 'number')  return `<span class="n">${v}</span>`;
+  if (typeof v === 'string')  return `<span class="s">"${escStr(v)}"</span>`;
+  if (Array.isArray(v)) {
+    if (v.length === 0) return '<span class="p">[]</span>';
+    const items = v.map(x => padNext + prettyJson(x, depth + 1)).join('<span class="p">,</span>\n');
+    return `<span class="p">[</span>\n${items}\n${pad}<span class="p">]</span>`;
+  }
+  const keys = Object.keys(v);
+  if (keys.length === 0) return '<span class="p">{}</span>';
+  const items = keys.map(k =>
+    `${padNext}<span class="k">"${escStr(k)}"</span><span class="p">:</span> ${prettyJson(v[k], depth + 1)}`
+  ).join('<span class="p">,</span>\n');
+  return `<span class="p">{</span>\n${items}\n${pad}<span class="p">}</span>`;
+}
+
+/* ---------- trace sidebar ---------- */
+function renderTrace() {
+  const t = i18n[lang];
+  traceList.innerHTML = t.stepNames.map((n, i) => `
+    <div class="trace-step" data-i="${i}">
+      <span class="ts-idx">${String(i + 1).padStart(2, '0')}</span>
+      <span class="ts-name">${n}</span>
+      <span class="ts-time">${STEP_TIMES[i].slice(-7)}</span>
+    </div>
+  `).join('');
+  traceList.querySelectorAll('.trace-step').forEach(el => {
+    el.addEventListener('click', () => {
+      cancelReplay();
+      jumpToStep(parseInt(el.dataset.i));
+    });
+  });
+}
+function setActive(idx) {
+  traceList.querySelectorAll('.trace-step').forEach(el => {
+    const i = parseInt(el.dataset.i);
+    el.classList.toggle('done', i < idx);
+    el.classList.toggle('active', i === idx);
+  });
+}
+function setAllDone() {
+  traceList.querySelectorAll('.trace-step').forEach(el => {
+    el.classList.add('done');
+    el.classList.remove('active');
+  });
+}
+
+/* ---------- message rendering ---------- */
+function makeMsg(kind, avatar, meta) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + kind;
+  div.innerHTML = `<div class="avatar">${avatar}</div><div class="content"><div class="meta">${meta}</div><div class="body"></div></div>`;
+  return div;
+}
+function scrollChat() { chatBody.scrollTop = chatBody.scrollHeight; }
+
+function pushUser(text, time) {
+  const t = i18n[lang];
+  const m = makeMsg('user', 'U', `${t.metaYou} · ${time}`);
+  m.querySelector('.body').innerHTML = fmt(text);
+  chatBody.appendChild(m); scrollChat();
+}
+function pushAssistant(text, time, stream) {
+  const t = i18n[lang];
+  const m = makeMsg('bot', 'AI', `${t.metaAgent} · ${time}`);
+  chatBody.appendChild(m);
+  const el = m.querySelector('.body');
+  if (stream) streamInto(el, text);
+  else el.innerHTML = fmt(text);
+  scrollChat();
+}
+function pushToolCall(payload, time) {
+  const t = i18n[lang];
+  const m = makeMsg('tool', '◆', `${t.metaToolCall} · ${time}`);
+  m.querySelector('.body').innerHTML = `→ <b>POST</b> /lunchguide/mcp · <em>${payload.params.name}</em>`;
+  const box = document.createElement('div');
+  box.className = 'json-box';
+  box.innerHTML = `<div class="j-head">→ <b>POST</b> /lunchguide/mcp · jsonrpc 2.0</div>${prettyJson(payload, 0)}`;
+  m.querySelector('.content').appendChild(box);
+  chatBody.appendChild(m); scrollChat();
+}
+function pushToolResult(payload, time) {
+  const t = i18n[lang];
+  const m = makeMsg('tool', '◇', `${t.metaToolResult} · ${time}`);
+  m.querySelector('.body').innerHTML = `← <span style="color:var(--teal)">200 OK</span> · ${payload.result.latency_ms}ms · ${payload.result.count} <em>restaurants</em>`;
+  const box = document.createElement('div');
+  box.className = 'json-box';
+  box.innerHTML = `<div class="j-head">← <span class="ok">200 OK</span> · ${payload.result.latency_ms}ms</div>${prettyJson(payload, 0)}`;
+  m.querySelector('.content').appendChild(box);
+  chatBody.appendChild(m); scrollChat();
+}
+
+function streamInto(el, text) {
+  let i = 0;
+  const step = Math.max(1, Math.round(text.length / 80));
+  const tick = () => {
+    if (i <= text.length) {
+      el.innerHTML = fmt(text.slice(0, i));
+      scrollChat();
+      i += step;
+      streamTimers.push(setTimeout(tick, 14));
+    } else {
+      el.innerHTML = fmt(text);
+    }
+  };
+  tick();
+}
+
+/* ---------- replay engine ---------- */
+let replayTimeouts = [];
+let streamTimers   = [];
+let replayRan      = false;
+
+function cancelReplay() {
+  replayTimeouts.forEach(clearTimeout); replayTimeouts = [];
+  streamTimers.forEach(clearTimeout);   streamTimers = [];
+}
+
+const stepBuilders = [
+  (t) => pushUser(t.traceUser, STEP_TIMES[0]),
+  (t) => pushAssistant(t.tracePlan, STEP_TIMES[1], true),
+  (_) => pushToolCall(TOOL_CALL, STEP_TIMES[2]),
+  (_) => pushToolResult(TOOL_RESULT, STEP_TIMES[3]),
+  (t) => pushAssistant(t.traceAnswer, STEP_TIMES[4], true)
+];
+
+function runTrace() {
+  cancelReplay();
+  chatBody.innerHTML = '';
+  replayBtn.disabled = true;
+  traceStatus.textContent = i18n[lang].statusRun;
+  traceStatus.setAttribute('data-i18n', 'statusRun');
+  setActive(-1);
+
+  const delays = [350, 800, 600, 950, 700];
+  let cum = 0;
+  const t = i18n[lang];
+  stepBuilders.forEach((fn, i) => {
+    cum += delays[i];
+    replayTimeouts.push(setTimeout(() => { setActive(i); fn(t); }, cum));
+  });
+  replayTimeouts.push(setTimeout(() => {
+    setAllDone();
+    traceStatus.textContent = i18n[lang].statusDone;
+    traceStatus.setAttribute('data-i18n', 'statusDone');
+    replayBtn.disabled = false;
+    replayRan = true;
+  }, cum + 900));
+}
+
+function jumpToStep(idx) {
+  cancelReplay();
+  chatBody.innerHTML = '';
+  const t = i18n[lang];
+  for (let i = 0; i <= idx; i++) {
+    // skip streaming for instant jump
+    if (i === 1 || i === 4) {
+      const m = makeMsg('bot', 'AI', `${t.metaAgent} · ${STEP_TIMES[i]}`);
+      chatBody.appendChild(m);
+      m.querySelector('.body').innerHTML = fmt(i === 1 ? t.tracePlan : t.traceAnswer);
+    } else {
+      stepBuilders[i](t);
+    }
+  }
+  setActive(idx);
+  if (idx === stepBuilders.length - 1) {
+    setAllDone();
+    traceStatus.textContent = t.statusDone;
+    traceStatus.setAttribute('data-i18n', 'statusDone');
+  } else {
+    traceStatus.textContent = t.statusRun;
+    traceStatus.setAttribute('data-i18n', 'statusRun');
+  }
+  replayBtn.disabled = false;
+  replayRan = true;
+}
+function jumpToEnd() { jumpToStep(stepBuilders.length - 1); }
+
+replayBtn.addEventListener('click', runTrace);
+
+/* boot */
+applyLang();
+const io = new IntersectionObserver((entries) => {
+  if (entries[0].isIntersecting) { io.disconnect(); runTrace(); }
+}, { threshold: 0.25 });
+io.observe(document.getElementById('demo'));
+</script>
+</body>
+</html>
