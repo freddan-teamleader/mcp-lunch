@@ -27,7 +27,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger(__name__)
 
 DATABASE_URL = os.environ["DATABASE_URL"]
-TRACK_CITIES = os.environ.get("TRACK_CITIES", "kalmar,karlskrona").split(",")
+# If TRACK_CITIES is set, use that – otherwise track all available cities.
+_env_cities = os.environ.get("TRACK_CITIES", "")
+TRACK_CITIES = _env_cities.split(",") if _env_cities else None
 
 
 # ---------------------------------------------------------------------------
@@ -156,12 +158,15 @@ def detect_changes(conn, city: str, restaurants: list[dict],
 def main():
     today = date.today()
     log.info(f"Price tracker starting — snapshot date: {today}")
-    log.info(f"Tracking cities: {TRACK_CITIES}")
+
+    from server import list_cities
+    cities = TRACK_CITIES or list(list_cities().keys())
+    log.info(f"Tracking {len(cities)} cities: {', '.join(cities)}")
 
     conn = get_conn()
     ensure_tables(conn)
 
-    for city in TRACK_CITIES:
+    for city in cities:
         city = city.strip()
         log.info(f"--- {city} ---")
         try:
