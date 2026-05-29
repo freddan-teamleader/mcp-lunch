@@ -43,7 +43,9 @@ import math
 import base64
 import json
 import mimetypes
+import datetime
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import httpx
 from urllib.parse import parse_qs
 from mcp.server.fastmcp import FastMCP
@@ -455,7 +457,13 @@ MYLUNCH_CITY_MAP: dict[str, str] = {
 def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
     """
     Parse mylunch.se city page into the same restaurant/dish format as matochmat.
-    Each restaurant is an <h2> with an <a> link, followed by dish text.
+
+    Structure: each restaurant is a div.mi containing:
+      div.mih > a[href] > h2   — name and link
+      div.miib > a > img       — logo
+      div.mim > div.mim-table  — dishes as div.mim-row rows
+        p.mim-txt   = actual dish (has price in p.mim-prc sibling)
+        p.mim-txt0  = header/separator line (skip)
     """
     from bs4 import BeautifulSoup
 
@@ -463,7 +471,7 @@ def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
 
-    price_re = re.compile(r"(\d{2,3})\s*[Kk]r", re.IGNORECASE)
+    price_re = re.compile(r"(\d{2,4})\s*[Kk]r", re.IGNORECASE)
     tag_re = re.compile(
         r"\b(GF|LF|MF|vegetarisk|vegansk|vegan|glutenfri|laktosfri)\b", re.IGNORECASE
     )
@@ -476,58 +484,66 @@ def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
     restaurants = []
     seen_names: set[str] = set()
 
-    for h2 in soup.find_all("h2"):
-        a = h2.find("a")
-        if not a:
+    for mi in soup.find_all("div", class_="mi"):
+        # Name and URL
+        mih = mi.find("div", class_="mih")
+        if not mih:
             continue
-        name = a.get_text(strip=True)
+        a = mih.find("a")
+        h2 = mih.find("h2")
+        if not h2:
+            continue
+        name = h2.get_text(strip=True)
         if not name or name.lower() in seen_names:
             continue
         seen_names.add(name.lower())
 
-        href = a.get("href", "")
+        href = a.get("href", "") if a else ""
         url = f"{MYLUNCH_BASE}{href}" if href.startswith("/") else href
 
-        # Collect text nodes between this h2 and the next h2/hr
+        # Logo
+        miib = mi.find("div", class_="miib")
+        logo_url = ""
+        if miib:
+            img = miib.find("img")
+            if img:
+                logo_url = img.get("src", "")
+
+        # Dishes from mim-row — only rows with p.mim-txt (not mim-txt0) are real dishes
         dishes = []
-        node = h2.find_next_sibling()
-        while node and node.name not in ("h2",):
-            text = node.get_text(separator="\n", strip=True)
-            for raw_line in text.splitlines():
-                line = raw_line.strip()
-                if not line or len(line) > 200:
-                    continue
+        for row in mi.find_all("div", class_="mim-row"):
+            txt_el = row.find("p", class_="mim-txt")
+            if not txt_el:
+                continue  # skip headers (mim-txt0)
+            dish_name = txt_el.get_text(strip=True)
+            if not dish_name or len(dish_name) > 250:
+                continue
 
-                # Extract price
-                price = None
-                price_match = price_re.search(line)
-                if price_match:
-                    price = int(price_match.group(1))
+            # Price from sibling p.mim-prc
+            prc_el = row.find("p", class_="mim-prc")
+            price = None
+            if prc_el:
+                pm = price_re.search(prc_el.get_text())
+                if pm:
+                    price = int(pm.group(1))
 
-                # Extract dietary tags
-                tags = []
-                is_veg = False
-                for m in tag_re.finditer(line):
-                    t = tag_map.get(m.group(1).lower(), m.group(1).lower())
-                    if t not in tags:
-                        tags.append(t)
-                    if t in ("vegetarisk", "vegansk", "vegan"):
-                        is_veg = True
+            # Dietary tags from dish name
+            tags = []
+            is_veg = False
+            for m in tag_re.finditer(dish_name):
+                t = tag_map.get(m.group(1).lower(), m.group(1).lower())
+                if t not in tags:
+                    tags.append(t)
+                if t in ("vegetarisk", "vegansk"):
+                    is_veg = True
 
-                # Clean line – remove price and tag tokens for dish name
-                dish_name = price_re.sub("", line).strip(" :-")
-                dish_name = re.sub(r"\b(GF|LF|MF)\b", "", dish_name, flags=re.IGNORECASE).strip()
-                if not dish_name:
-                    continue
-
-                dishes.append({
-                    "name": dish_name,
-                    "price": price,
-                    "vegetarian": is_veg,
-                    "tags": tags,
-                    "closed": False,
-                })
-            node = node.find_next_sibling()
+            dishes.append({
+                "name": dish_name,
+                "price": price,
+                "vegetarian": is_veg,
+                "tags": tags,
+                "closed": False,
+            })
 
         if not dishes:
             continue
@@ -542,7 +558,7 @@ def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
             "name": name,
             "slug": slug,
             "city": city_slug,
-            "logo": "",
+            "logo": logo_url,
             "url": url,
             "source": "mylunch.se",
             "dishes": dishes,
@@ -551,16 +567,204 @@ def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
     return restaurants
 
 
+_SITEMAP_CACHE: dict[str, tuple[float, list[str]]] = {}
+SITEMAP_TTL = 86400  # 24 h — restaurant list rarely changes
+
+_SV_DAYS = ["måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag"]
+
+
+def _today_sv() -> str:
+    return _SV_DAYS[datetime.date.today().weekday()]
+
+
+def _get_mylunch_slugs(city: str) -> list[str]:
+    """Return restaurant slugs for `city` from the mylunch.se sitemap (cached 24 h)."""
+    ts, slugs = _SITEMAP_CACHE.get(city, (0, []))
+    if time.time() - ts < SITEMAP_TTL:
+        return slugs
+    try:
+        xml = _fetch(f"{MYLUNCH_BASE}/sitemap-companies.xml")
+        slugs = re.findall(
+            rf"https://www\.mylunch\.se/{re.escape(city)}/([^/]+)/lunch/", xml
+        )
+    except Exception:
+        slugs = []
+    _SITEMAP_CACHE[city] = (time.time(), slugs)
+    return slugs
+
+
+def _parse_mylunch_restaurant_today(html: str, slug: str, city_slug: str) -> dict | None:
+    """
+    Parse an individual mylunch.se restaurant page for today's menu.
+    Returns None if the restaurant has no menu today.
+    """
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
+
+    # Name from h1
+    h1 = soup.find("h1")
+    name = h1.get_text(strip=True) if h1 else slug.replace("-", " ").title()
+    # Strip " - Lunch" suffix that individual pages sometimes add
+    name = re.sub(r"\s*[-–]\s*lunch\s*$", "", name, flags=re.IGNORECASE).strip()
+
+    url = f"{MYLUNCH_BASE}/{city_slug}/{slug}/lunch/"
+
+    # Restaurant-level price (used when per-dish price is missing)
+    rest_price: int | None = None
+    for price_el in soup.find_all("div", class_="midp"):
+        p = price_el.find("p")
+        if p:
+            pm = re.search(r"(\d{2,4})", p.get_text())
+            if pm:
+                rest_price = int(pm.group(1))
+                break
+
+    # Logo
+    img = soup.find("img", class_="miibm")
+    logo_url = img.get("src", "") if img else ""
+
+    _SKIP_HEADER = re.compile(
+        r"^\*+[\s*]+$|nybakat|kaffe ingår|sallad ingår|bröd ingår"
+        r"|ingår$|^\s*$",
+        re.I,
+    )
+    # Swedish day names — used to identify per-day sections
+    _DAY_RE = re.compile(
+        r"^(måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)\b", re.I
+    )
+
+    def _rows_to_dishes(rows: list, default_price: int | None) -> list[dict]:
+        dishes_out = []
+        for row in rows:
+            p0 = row.find("p", class_="mim-txt0")
+            if not p0:
+                continue
+            dish_name = p0.get_text(strip=True)
+            if not dish_name or _SKIP_HEADER.search(dish_name):
+                continue
+            prc_el = row.find("p", class_="mim-prc")
+            price: int | None = None
+            if prc_el:
+                pm2 = re.search(r"(\d{2,4})", prc_el.get_text())
+                if pm2:
+                    price = int(pm2.group(1))
+            if price is None:
+                price = default_price
+            is_veg = bool(re.search(r"\bvegetar|\bvegan", dish_name, re.I))
+            dishes_out.append({
+                "name": dish_name,
+                "price": price,
+                "vegetarian": is_veg,
+                "tags": ["vegetarisk"] if is_veg else [],
+                "closed": False,
+            })
+        return dishes_out
+
+    all_mims = soup.find_all("div", class_="mim")
+    today = _today_sv()
+
+    # Strategy 1: find today's day-specific section
+    today_mim = None
+    for mim in all_mims:
+        first_row = mim.find("div", class_="mim-row")
+        if first_row and today in first_row.get_text("", strip=True).lower():
+            today_mim = mim
+            break
+
+    if today_mim is not None:
+        # Day-specific menu: skip the date header row
+        rows = today_mim.find_all("div", class_="mim-row")[1:]
+        dishes = _rows_to_dishes(rows, rest_price)
+    else:
+        # Strategy 2: no day-specific sections — use the first mim block that
+        # does NOT start with a day-name header (generic "Dagens lunch" / "Veckans rätter").
+        # Also extract price from the header line if present.
+        dishes = []
+        for mim in all_mims:
+            all_rows = mim.find_all("div", class_="mim-row")
+            if not all_rows:
+                continue
+            first_text = all_rows[0].get_text("", strip=True).lower()
+            # Skip if this block starts with a different day name
+            if _DAY_RE.match(first_text) and today not in first_text:
+                continue
+            # Extract price embedded in the header (e.g. "Dagens lunch ... 195Kr")
+            header_pm = re.search(r"(\d{2,4})\s*kr", first_text, re.I)
+            block_price = int(header_pm.group(1)) if header_pm else rest_price
+            # Skip header row; use rest
+            candidate = _rows_to_dishes(all_rows[1:], block_price)
+            if candidate:
+                dishes = candidate
+                # Update rest_price if we found one in the block header
+                if block_price and rest_price is None:
+                    rest_price = block_price
+                break
+
+    if not dishes:
+        return None
+
+    return {
+        "name": name,
+        "slug": slug,
+        "city": city_slug,
+        "logo": logo_url,
+        "url": url,
+        "source": "mylunch.se",
+        "dishes": dishes,
+    }
+
+
+def _fetch_mylunch_one(args: tuple[str, str]) -> dict | None:
+    slug, city = args
+    try:
+        html = _fetch(f"{MYLUNCH_BASE}/{city}/{slug}/lunch/")
+        return _parse_mylunch_restaurant_today(html, slug, city)
+    except Exception:
+        return None
+
+
+def _fetch_mylunch_full(city: str, exclude_slugs: set[str]) -> list[dict]:
+    """
+    Fetch all restaurants for `city` by hitting each individual page concurrently.
+    `exclude_slugs` are already known from the city page and will be skipped.
+    """
+    slugs = [s for s in _get_mylunch_slugs(city) if s not in exclude_slugs]
+    if not slugs:
+        return []
+    results: list[dict] = []
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        for r in as_completed(pool.submit(_fetch_mylunch_one, (s, city)) for s in slugs):
+            item = r.result()
+            if item:
+                results.append(item)
+    return results
+
+
 def _fetch_mylunch(city: str) -> list[dict]:
     """Fetch and parse mylunch.se for a given city slug."""
     ml_city = MYLUNCH_CITY_MAP.get(city)
     if not ml_city:
         return []
+
+    # Fast path: city overview page (16 results with per-dish prices)
+    city_page: list[dict] = []
     try:
         html = _fetch(f"{MYLUNCH_BASE}/{ml_city}/")
-        return _parse_mylunch_page(html, city)
+        city_page = _parse_mylunch_page(html, city)
     except Exception:
-        return []
+        pass
+
+    # Extended path: fetch remaining restaurants from sitemap if city page is sparse
+    known_slugs = {r["slug"] for r in city_page}
+    total_in_sitemap = len(_get_mylunch_slugs(ml_city))
+    if total_in_sitemap > len(city_page):
+        extras = _fetch_mylunch_full(ml_city, known_slugs)
+        return city_page + extras
+
+    return city_page
 
 
 def _merge_sources(matochmat: list[dict], mylunch: list[dict]) -> list[dict]:
