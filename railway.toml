@@ -3,3 +3,7 @@ builder = "dockerfile"
 
 [deploy]
 restartPolicyType = "on_failure"
+
+[[cronjobs]]
+schedule = "0 11 1 * *"
+command = "python price_tracker.py"
