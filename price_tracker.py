@@ -26,7 +26,8 @@ from psycopg2.extras import execute_values
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
-DATABASE_URL = os.environ["DATABASE_URL"]
+# Resolved lazily in main() so that importing this module never raises KeyError.
+DATABASE_URL: str | None = None
 # If TRACK_CITIES is set, use that – otherwise track all available cities.
 _env_cities = os.environ.get("TRACK_CITIES", "")
 TRACK_CITIES = _env_cities.split(",") if _env_cities else None
@@ -62,7 +63,10 @@ CREATE TABLE IF NOT EXISTS price_changes (
 
 
 def get_conn():
-    return psycopg2.connect(DATABASE_URL)
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL environment variable is not set")
+    return psycopg2.connect(url)
 
 
 def ensure_tables(conn):
