@@ -614,6 +614,83 @@ def get_lunch_near(city: str, lat: float, lon: float, radius_km: float = 1.0) ->
 
 
 @mcp.tool()
+def compare_city_prices(month: str | None = None) -> str:
+    """
+    Compare average lunch prices across cities using historical snapshot data.
+
+    Requires the price tracker to have run at least once (DATABASE_URL must be set).
+
+    Args:
+        month: Optional filter in YYYY-MM format (e.g. "2026-06").
+               If omitted, uses all available snapshots.
+
+    Returns:
+        A JSON string with a list of city summaries, sorted cheapest to most expensive:
+          - city (str): City slug
+          - display_name (str): Human-readable city name
+          - avg_price (float): Average dish price in SEK
+          - min_price (int): Cheapest dish recorded
+          - max_price (int): Most expensive dish recorded
+          - dish_count (int): Number of priced dishes in the snapshot(s)
+          - snapshots (int): Number of monthly snapshots included
+    """
+    import os
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        return json.dumps({"error": "DATABASE_URL not set — price tracker has not been configured."})
+
+    try:
+        import psycopg2
+        conn = psycopg2.connect(database_url)
+        with conn.cursor() as cur:
+            if month:
+                cur.execute("""
+                    SELECT
+                        city,
+                        ROUND(AVG(price)::numeric, 1)  AS avg_price,
+                        MIN(price)                      AS min_price,
+                        MAX(price)                      AS max_price,
+                        COUNT(*)                        AS dish_count,
+                        COUNT(DISTINCT snapshot_date)   AS snapshots
+                    FROM lunch_prices
+                    WHERE to_char(snapshot_date, 'YYYY-MM') = %s
+                    GROUP BY city
+                    ORDER BY avg_price ASC
+                """, (month,))
+            else:
+                cur.execute("""
+                    SELECT
+                        city,
+                        ROUND(AVG(price)::numeric, 1)  AS avg_price,
+                        MIN(price)                      AS min_price,
+                        MAX(price)                      AS max_price,
+                        COUNT(*)                        AS dish_count,
+                        COUNT(DISTINCT snapshot_date)   AS snapshots
+                    FROM lunch_prices
+                    GROUP BY city
+                    ORDER BY avg_price ASC
+                """)
+            rows = cur.fetchall()
+        conn.close()
+    except Exception as e:
+        return json.dumps({"error": f"Database query failed: {e}"})
+
+    result = [
+        {
+            "city": row[0],
+            "display_name": CITIES.get(row[0], row[0].capitalize()),
+            "avg_price": float(row[1]),
+            "min_price": row[2],
+            "max_price": row[3],
+            "dish_count": row[4],
+            "snapshots": row[5],
+        }
+        for row in rows
+    ]
+    return json.dumps(result, ensure_ascii=False)
+
+
+@mcp.tool()
 def get_restaurant_menu(city: str, restaurant: str) -> str:
     """
     Get the full weekly lunch menu for a specific restaurant.
