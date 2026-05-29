@@ -1221,6 +1221,30 @@ def get_restaurant_menu(city: str, restaurant: str) -> str:
 # Pure ASGI middleware in front of the MCP app. Does NOT buffer the MCP
 # response stream (important for SSE).
 #
+# ---------------------------------------------------------------------------
+# Slack-triggered price check
+# ---------------------------------------------------------------------------
+
+def _run_price_check_background() -> None:
+    """Run price_tracker.py in a subprocess and notify Slack when done."""
+    import subprocess
+    import sys
+    try:
+        result = subprocess.run(
+            [sys.executable, str(Path(__file__).parent / "price_tracker.py")],
+            capture_output=True, text=True, timeout=600,
+        )
+        if result.returncode == 0:
+            _notify_slack(":white_check_mark: *mcp-lunch*: Priskoll klar! Databasen är uppdaterad.")
+        else:
+            _notify_slack(
+                f":x: *mcp-lunch*: Priskoll misslyckades (exit {result.returncode}).\n"
+                f"```{result.stderr[-500:]}```"
+            )
+    except Exception as e:
+        _notify_slack(f":x: *mcp-lunch*: Priskoll kraschade: {e}")
+
+
 # Routes handled here (everything else falls through to MCP):
 #   GET /                         → site/index.html       (Aurora landing)
 #   GET /canvas.html              → site/canvas.html      (3-variant review)
@@ -1258,6 +1282,18 @@ class ImageProxyMiddleware:
 
     def __init__(self, app):
         self.app = app
+
+    @staticmethod
+    async def _iter_body(receive):
+        """Async generator that yields body chunks from an ASGI receive channel."""
+        while True:
+            msg = await receive()
+            if msg["type"] == "http.request":
+                chunk = msg.get("body", b"")
+                if chunk:
+                    yield chunk
+                if not msg.get("more_body", False):
+                    break
 
     @classmethod
     def _resolve_static(cls, req_path: str) -> Path | None:
@@ -1340,6 +1376,32 @@ class ImageProxyMiddleware:
                     })
                     await send({"type": "http.response.body", "body": self._FALLBACK})
                     return
+
+        # ── Slack-triggered price check ──────────────────────────────────────
+        if req_path == "/run-price-check" and scope["method"] == "POST":
+            import threading
+            from urllib.parse import parse_qs as _parse_qs
+            body_parts = []
+            async for chunk in self._iter_body(receive):
+                body_parts.append(chunk)
+            body = b"".join(body_parts).decode(errors="replace")
+            params = _parse_qs(body)
+            token_in_body = (params.get("token") or [""])[0]
+            expected_token = os.environ.get("SLACK_PRICE_CHECK_TOKEN", "")
+            if not expected_token or token_in_body != expected_token:
+                resp_body = b"Unauthorized"
+                await send({"type": "http.response.start", "status": 401,
+                            "headers": [[b"content-type", b"text/plain"]]})
+                await send({"type": "http.response.body", "body": resp_body})
+                return
+            # Respond immediately to Slack (must reply within 3 s)
+            ack = ":hourglass: Startar priskoll\u2026".encode("utf-8")
+            await send({"type": "http.response.start", "status": 200,
+                        "headers": [[b"content-type", b"text/plain; charset=utf-8"]]})
+            await send({"type": "http.response.body", "body": ack})
+            # Run price_tracker.py in a background thread
+            threading.Thread(target=_run_price_check_background, daemon=True).start()
+            return
 
         # ── Image proxy ─────────────────────────────────────────────────────
         if req_path == "/image-proxy":
