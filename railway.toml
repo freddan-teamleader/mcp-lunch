@@ -1,6 +1,5 @@
 [build]
-builder = "nixpacks"
+builder = "dockerfile"
 
 [deploy]
-startCommand = "python server.py"
 restartPolicyType = "on_failure"
