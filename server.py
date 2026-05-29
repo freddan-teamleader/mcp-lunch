@@ -60,6 +60,12 @@ mcp = FastMCP(
         "Call list_cities first to get valid city slugs, then get_lunch_guide for today's "
         "menus in a city, or get_restaurant_menu for a specific restaurant's full week."
     ),
+    # Mount directly on /lunchguide so no path rewriting is needed.
+    streamable_http_path="/lunchguide",
+    # Stateless mode: every POST is self-contained — no session state needed.
+    # This prevents 404s when a session is lost due to Railway restarts or
+    # load-balancer connection rotation.
+    stateless_http=True,
     # DNS-rebinding protection is disabled here because we sit behind
     # Railway's TLS-terminating proxy, which already enforces origin security.
     transport_security=TransportSecuritySettings(
@@ -802,17 +808,6 @@ class ImageProxyMiddleware:
             })
             await send({"type": "http.response.body", "body": b"Bad request"})
             return
-
-        # ── Path alias: /lunchguide → /mcp ─────────────────────────────────
-        if req_path == "/lunchguide" or req_path.startswith("/lunchguide/"):
-            suffix = req_path[len("/lunchguide"):]
-            new_path = "/mcp" + suffix
-            scope = {
-                **scope,
-                "path": new_path,
-                "raw_path": new_path.encode(),
-                "root_path": "",
-            }
 
         await self.app(scope, receive, send)
 
