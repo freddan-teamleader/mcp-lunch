@@ -1378,7 +1378,7 @@ class ImageProxyMiddleware:
                     return
 
         # ── Slack-triggered price check ──────────────────────────────────────
-        if req_path == "/run-price-check" and scope["method"] == "POST":
+        if req_path == "/lunchguide/run-price-check" and scope["method"] == "POST":
             import threading
             from urllib.parse import parse_qs as _parse_qs
             body_parts = []
@@ -1404,7 +1404,7 @@ class ImageProxyMiddleware:
             return
 
         # ── Image proxy ─────────────────────────────────────────────────────
-        if req_path == "/image-proxy":
+        if req_path == "/lunchguide/image-proxy":
             qs = parse_qs(scope.get("query_string", b"").decode())
             img_path = (qs.get("path") or [""])[0]
 
