@@ -38,6 +38,7 @@ Tools exposed:
 """
 
 import re
+import os
 import time
 import math
 import base64
@@ -407,8 +408,119 @@ def _simple_text_parse(html: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# mylunch.se parser
+# Slack notifier
 # ---------------------------------------------------------------------------
+
+def _notify_slack(message: str) -> None:
+    """Post a message to Slack via webhook. Fails silently."""
+    webhook = os.environ.get("SLACK_WEBHOOK_URL")
+    if not webhook:
+        return
+    try:
+        httpx.post(webhook, json={"text": message}, timeout=5)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# LLM dish cleaner (Claude Haiku, opt-in via ANTHROPIC_API_KEY)
+# ---------------------------------------------------------------------------
+
+_llm_quota_exceeded = False  # module-level flag — set on 429/529, cleared on restart
+
+
+def _clean_dishes_with_llm(dishes: list[dict], restaurant_name: str) -> list[dict]:
+    """
+    Use Claude Haiku to clean up raw dish data from mylunch.se.
+
+    Only runs when ANTHROPIC_API_KEY is set and quota has not been exceeded.
+    Falls back to raw dishes on any error.
+
+    Returns a cleaned list of dish dicts in the same format.
+    """
+    global _llm_quota_exceeded
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key or _llm_quota_exceeded:
+        return dishes
+
+    raw = "\n".join(
+        f"- {d['name']}" + (f" ({d['price']} kr)" if d.get("price") else "")
+        for d in dishes
+    )
+
+    prompt = f"""You are extracting structured lunch menu data for the restaurant "{restaurant_name}".
+
+Below is raw text scraped from a Swedish lunch guide website. It may contain:
+- Actual dish names and prices (keep these)
+- Restaurant descriptions, opening hours, marketing text (remove these)
+- Navigation fragments, footers, form labels (remove these)
+
+Return ONLY a JSON array of dish objects. Each object must have:
+  "name": string (the dish name, cleaned up, in Swedish)
+  "price": integer or null (price in SEK, null if not found)
+  "vegetarian": boolean (true if dish is vegetarian/vegan)
+  "tags": array of strings (dietary tags: "vegetarisk", "vegansk", "glutenfri", "laktosfri")
+  "closed": false
+
+If there are no real dishes, return an empty array [].
+Return ONLY valid JSON, no markdown, no explanation.
+
+Raw text:
+{raw}"""
+
+    try:
+        resp = httpx.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=15,
+        )
+
+        if resp.status_code in (429, 529):
+            _llm_quota_exceeded = True
+            msg = (
+                f":warning: *mcp-lunch*: Anthropic API quota exceeded (HTTP {resp.status_code}). "
+                f"LLM dish cleaning disabled until next restart."
+            )
+            import logging
+            logging.getLogger(__name__).warning(msg)
+            _notify_slack(msg)
+            return dishes
+
+        resp.raise_for_status()
+        data = resp.json()
+        text = data["content"][0]["text"].strip()
+        # Strip markdown code fences if present
+        text = re.sub(r"^```[a-z]*\n?", "", text)
+        text = re.sub(r"\n?```$", "", text)
+        cleaned = json.loads(text)
+        if not isinstance(cleaned, list):
+            return dishes
+        # Ensure required fields
+        result = []
+        for item in cleaned:
+            if not isinstance(item, dict) or not item.get("name"):
+                continue
+            result.append({
+                "name": str(item.get("name", "")),
+                "price": int(item["price"]) if item.get("price") else None,
+                "vegetarian": bool(item.get("vegetarian", False)),
+                "tags": list(item.get("tags", [])),
+                "closed": False,
+            })
+        return result if result else dishes
+
+    except Exception:
+        return dishes
 
 MYLUNCH_BASE = "https://www.mylunch.se"
 
@@ -755,6 +867,15 @@ def _fetch_mylunch(city: str) -> list[dict]:
         for r in restaurants:
             if r.get("logo", "").startswith("data:image/svg"):
                 r["logo"] = ""
+        # LLM cleanup — only if ANTHROPIC_API_KEY is set
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = {
+                    pool.submit(_clean_dishes_with_llm, r["dishes"], r["name"]): i
+                    for i, r in enumerate(restaurants)
+                }
+                for fut, idx in futures.items():
+                    restaurants[idx]["dishes"] = fut.result()
         return restaurants
     except Exception:
         return []
