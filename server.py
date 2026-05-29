@@ -1,34 +1,6 @@
 """
-mcp-lunch  —  PATCHED to serve the teamleader.se landing page at /
----------------------------------------------------------------------
-Drop-in replacement for `freddan-teamleader/mcp-lunch/server.py`.
-
-Only diff vs. the upstream version:
-  • Adds `import mimetypes` and `from pathlib import Path`.
-  • Replaces the inline `_LANDING` placeholder in ImageProxyMiddleware
-    with a static-file handler that serves `site/index.html` at `/`,
-    plus `site/canvas.html`, `site/design-canvas.jsx`, and anything under
-    `site/variants/*.html`.
-  • Falls through to a small inline notice if the `site/` folder is
-    missing (so this file still works even before you copy the assets in).
-
-Everything else — MCP tools, image proxy, `/lunchguide → /mcp` alias,
-SSE transport — is unchanged.
-
-Layout expected on disk:
-    mcp-lunch/
-      server.py          ← this file
-      requirements.txt
-      railway.toml
-      site/
-        index.html       ← Aurora landing
-        canvas.html      ← (optional) 3-variant review canvas
-        design-canvas.jsx← (optional) only needed if canvas.html is kept
-        variants/        ← (optional)
-          aurora.html
-          sunset.html
-          acid.html
-
+mcp-lunch
+---------
 An MCP server that fetches today's lunch guides for Swedish cities.
 
 Tools exposed:
@@ -42,8 +14,6 @@ import time
 import math
 import base64
 import json
-import mimetypes
-from pathlib import Path
 import httpx
 from urllib.parse import parse_qs
 from mcp.server.fastmcp import FastMCP
@@ -382,6 +352,8 @@ def _parse_dishes(lines: list[str]) -> list[dict]:
     if current is not None:
         dishes.append(current)
 
+    # Drop entries that are clearly not dishes (e.g. lone "Stängt" with no price)
+    # but keep them as a status signal
     return dishes
 
 
@@ -390,9 +362,11 @@ def _simple_text_parse(html: str) -> str:
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html, "html.parser")
+    # Remove scripts and styles
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
     text = soup.get_text(separator="\n")
+    # Collapse blank lines
     lines = [l.strip() for l in text.splitlines()]
     lines = [l for l in lines if l]
     return "\n".join(lines)
@@ -491,6 +465,7 @@ def get_logos(city: str) -> str:
     if cached is not None:
         return json.dumps(cached, ensure_ascii=False)
 
+    # Re-use cached lunch data when possible
     restaurants: list[dict] = _cache_get(f"lunch:{city}") or []  # type: ignore[assignment]
     if not restaurants:
         try:
@@ -585,6 +560,7 @@ def get_lunch_near(city: str, lat: float, lon: float, radius_km: float = 1.0) ->
     city = city.lower().strip()
     city_display = CITIES.get(city, city.capitalize())
 
+    # Get (or fetch) the full restaurant list
     restaurants: list[dict] = _cache_get(f"lunch:{city}") or []  # type: ignore[assignment]
     if not restaurants:
         try:
@@ -633,83 +609,34 @@ def get_restaurant_menu(city: str, restaurant: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Static landing  +  image proxy  +  /lunchguide alias
+# Image proxy — pure ASGI, does NOT buffer responses (safe for streaming MCP)
 # ---------------------------------------------------------------------------
-#
-# Pure ASGI middleware in front of the MCP app. Does NOT buffer the MCP
-# response stream (important for SSE).
-#
-# Routes handled here (everything else falls through to MCP):
-#   GET /                         → site/index.html       (Aurora landing)
-#   GET /canvas.html              → site/canvas.html      (3-variant review)
-#   GET /design-canvas.jsx        → site/design-canvas.jsx
-#   GET /variants/<name>.html     → site/variants/<name>.html
-#   GET /image-proxy?path=/...    → proxies images from matochmat.se
-#   *   /lunchguide(/*)           → rewritten to /mcp(/*)
 
 
 class ImageProxyMiddleware:
-    """ASGI middleware: static landing files, image proxy, /lunchguide alias."""
-
-    _STATIC_DIR = (Path(__file__).parent / "site").resolve()
-
-    # Explicit route table for root-level files
-    _STATIC_ROUTES: dict[str, str] = {
-        "/": "index.html",
-        "/index.html": "index.html",
-        "/canvas.html": "canvas.html",
-        "/design-canvas.jsx": "design-canvas.jsx",
-        "/favicon.ico": "favicon.ico",  # served if you add one, ignored otherwise
-    }
-
-    # Tiny fallback page if site/ has not been copied in yet
-    _FALLBACK = (
-        "<!doctype html><meta charset=\"utf-8\"><title>teamleader.se</title>"
-        "<style>body{font-family:system-ui;max-width:560px;margin:6rem auto;"
-        "padding:0 1.5rem;color:#222;line-height:1.6}code{background:#f4f4f4;"
-        "padding:2px 6px;border-radius:4px;font-size:.9em}</style>"
-        "<h1>teamleader.se</h1>"
-        "<p>MCP server live at <code>/lunchguide</code>. "
-        "Landing page assets not deployed yet — drop <code>site/index.html</code> "
-        "into the repo and redeploy.</p>"
-    ).encode("utf-8")
+    """
+    Intercepts GET /image-proxy?path=/assets/... and proxies the image.
+    All other requests are passed straight through to the MCP app unchanged.
+    """
 
     def __init__(self, app):
         self.app = app
 
-    @classmethod
-    def _resolve_static(cls, req_path: str) -> Path | None:
-        """Return the resolved file path if `req_path` maps to a safe static asset."""
-        # Explicit alias map
-        if req_path in cls._STATIC_ROUTES:
-            return cls._STATIC_DIR / cls._STATIC_ROUTES[req_path]
-        # Anything under /variants/, .html only, no traversal
-        if req_path.startswith("/variants/") and req_path.endswith(".html"):
-            candidate = (cls._STATIC_DIR / req_path.lstrip("/")).resolve()
-            try:
-                candidate.relative_to(cls._STATIC_DIR)
-            except ValueError:
-                return None
-            return candidate
-        return None
-
-    @staticmethod
-    def _content_type(path: Path) -> bytes:
-        suffix = path.suffix.lower()
-        if suffix == ".jsx":
-            return b"application/javascript; charset=utf-8"
-        if suffix == ".html":
-            return b"text/html; charset=utf-8"
-        if suffix == ".css":
-            return b"text/css; charset=utf-8"
-        if suffix == ".svg":
-            return b"image/svg+xml"
-        mt, _ = mimetypes.guess_type(path.name)
-        if not mt:
-            return b"application/octet-stream"
-        if mt.startswith(("text/", "application/javascript", "application/json")):
-            mt = f"{mt}; charset=utf-8"
-        return mt.encode()
+    _LANDING = b"""<!doctype html>
+<html lang="sv">
+<head><meta charset="utf-8"><title>Lunch-guide MCP</title>
+<style>body{font-family:system-ui,sans-serif;max-width:520px;margin:4rem auto;padding:0 1.5rem;color:#222}
+h1{font-size:1.4rem;font-weight:500;margin-bottom:.5rem}
+p{color:#555;line-height:1.7}code{background:#f4f4f4;padding:2px 6px;border-radius:4px;font-size:.9em}
+a{color:#0070f3}</style>
+</head>
+<body>
+<h1>Lunch-guide MCP</h1>
+<p>MCP-server som listar svenska restaurangers lunchmenyer.</p>
+<p>Anslut via:<br><code>https://teamleader.se/lunch</code></p>
+<p>Tillgängliga verktyg: <code>list_cities</code> · <code>get_lunch_guide</code> ·
+<code>get_lunch_near</code> · <code>get_logos</code> · <code>get_restaurant_menu</code></p>
+</body></html>"""
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") != "http":
@@ -717,47 +644,17 @@ class ImageProxyMiddleware:
             return
 
         req_path: str = scope.get("path", "")
-        method: str = scope.get("method", "GET").upper()
 
-        # ── Static landing files ────────────────────────────────────────────
-        if method in ("GET", "HEAD"):
-            static_file = self._resolve_static(req_path)
-            if static_file is not None:
-                if static_file.is_file():
-                    body = static_file.read_bytes()
-                    cache = (
-                        b"no-cache"
-                        if static_file.suffix == ".html"
-                        else b"public, max-age=3600"
-                    )
-                    await send({
-                        "type": "http.response.start",
-                        "status": 200,
-                        "headers": [
-                            [b"content-type", self._content_type(static_file)],
-                            [b"content-length", str(len(body)).encode()],
-                            [b"cache-control", cache],
-                            [b"x-content-type-options", b"nosniff"],
-                            [b"referrer-policy", b"strict-origin-when-cross-origin"],
-                        ],
-                    })
-                    await send({
-                        "type": "http.response.body",
-                        "body": b"" if method == "HEAD" else body,
-                    })
-                    return
-                # Route is known but file is missing → fall back gracefully on `/`
-                if req_path in ("/", "/index.html"):
-                    await send({
-                        "type": "http.response.start",
-                        "status": 200,
-                        "headers": [
-                            [b"content-type", b"text/html; charset=utf-8"],
-                            [b"content-length", str(len(self._FALLBACK)).encode()],
-                        ],
-                    })
-                    await send({"type": "http.response.body", "body": self._FALLBACK})
-                    return
+        # ── Landing page ────────────────────────────────────────────────────
+        if req_path in ("", "/"):
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [[b"content-type", b"text/html; charset=utf-8"],
+                            [b"content-length", str(len(self._LANDING)).encode()]],
+            })
+            await send({"type": "http.response.body", "body": self._LANDING})
+            return
 
         # ── Image proxy ─────────────────────────────────────────────────────
         if req_path == "/image-proxy":
@@ -805,8 +702,14 @@ class ImageProxyMiddleware:
 
         # ── Path alias: /lunchguide → /mcp ─────────────────────────────────
         if req_path == "/lunchguide" or req_path.startswith("/lunchguide/"):
-            new_path = "/mcp" + req_path[len("/lunchguide"):]
-            scope = {**scope, "path": new_path, "raw_path": new_path.encode()}
+            suffix = req_path[len("/lunchguide"):]
+            new_path = "/mcp" + suffix
+            scope = {
+                **scope,
+                "path": new_path,
+                "raw_path": new_path.encode(),
+                "root_path": "",
+            }
 
         await self.app(scope, receive, send)
 
