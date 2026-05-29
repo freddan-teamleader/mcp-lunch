@@ -602,6 +602,7 @@ def list_cities() -> dict:
 def get_lunch_guide(city: str) -> str:
     """
     Get today's lunch menus for all restaurants in a Swedish city.
+    Fetches from multiple sources (matochmat.se + mylunch.se), merged and deduplicated.
 
     Args:
         city: City slug (e.g. "umea", "stockholm", "goteborg").
@@ -611,58 +612,21 @@ def get_lunch_guide(city: str) -> str:
         A JSON string — parse with JSON.parse() (JS) or json.loads() (Python).
         The parsed value is a list of restaurant objects, each containing:
           - name (str): Restaurant name
-          - slug (str): Restaurant slug for use with get_restaurant_menu and get_logos
+          - slug (str): Restaurant slug
           - city (str): City slug
-          - logo (str): Relative path to logo image (prepend base URL, or use get_logos for base64)
+          - logo (str): Relative path to logo image
           - url (str): Direct link to the restaurant's page
+          - source (str): "matochmat.se" or "mylunch.se"
           - dishes (list): Today's dishes, each with:
               - name (str): Dish name or description line
               - price (int|None): Price in SEK, null for description lines
               - vegetarian (bool): Whether the dish is vegetarian
               - tags (list[str]): Dietary tags e.g. ["vegetarisk", "glutenfri"]
               - closed (bool): True if restaurant is closed today
-
-        Note: dishes with price=null are description lines for the preceding priced dish.
-        Note: when called via callMcpTool in a Cowork artifact the response arrives as
-              {content: [{type:"text", text:"<this JSON string>"}]} — read content[0].text
-              and JSON.parse it to get the array.
     """
     city = city.lower().strip()
 
     cache_key = f"lunch:{city}"
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return json.dumps(cached, ensure_ascii=False)
-
-    url = f"{BASE_URL}/lunch/{city}/"
-    try:
-        html = _fetch(url)
-    except httpx.HTTPStatusError as e:
-        return json.dumps([{"error": f"Could not fetch lunch guide for '{city}': {e}"}])
-
-    restaurants = _parse_lunch_page(html)
-    if not restaurants:
-        return json.dumps([{"error": f"No lunch data found for city '{city}'. Try a different slug."}])
-
-    _cache_set(cache_key, restaurants)
-    return json.dumps(restaurants, ensure_ascii=False)
-
-
-@mcp.tool()
-def get_lunch_guide_extended(city: str) -> str:
-    """
-    Get today's lunch menus from multiple sources (matochmat.se + mylunch.se),
-    merged and deduplicated. Returns more restaurants than get_lunch_guide.
-
-    Each restaurant has an added field:
-      - source (str): "matochmat.se" or "mylunch.se"
-
-    Args:
-        city: City slug (e.g. "kalmar", "stockholm"). Use list_cities() for valid slugs.
-    """
-    city = city.lower().strip()
-
-    cache_key = f"lunch_ext:{city}"
     cached = _cache_get(cache_key)
     if cached is not None:
         return json.dumps(cached, ensure_ascii=False)
@@ -672,7 +636,6 @@ def get_lunch_guide_extended(city: str) -> str:
     try:
         html = _fetch(f"{BASE_URL}/lunch/{city}/")
         matochmat = _parse_lunch_page(html)
-        _cache_set(f"lunch:{city}", matochmat)
     except Exception:
         pass
 
@@ -682,7 +645,7 @@ def get_lunch_guide_extended(city: str) -> str:
     merged = _merge_sources(matochmat, mylunch)
 
     if not merged:
-        return json.dumps([{"error": f"No lunch data found for '{city}' from any source."}])
+        return json.dumps([{"error": f"No lunch data found for city '{city}'. Try a different slug."}])
 
     _cache_set(cache_key, merged)
     return json.dumps(merged, ensure_ascii=False)
