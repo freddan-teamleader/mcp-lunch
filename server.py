@@ -1380,20 +1380,28 @@ class ImageProxyMiddleware:
         # ── Slack-triggered price check ──────────────────────────────────────
         if req_path == "/lunchguide/run-price-check" and scope["method"] == "POST":
             import threading
+            import hashlib
+            import hmac
             from urllib.parse import parse_qs as _parse_qs
             body_parts = []
             async for chunk in self._iter_body(receive):
                 body_parts.append(chunk)
-            body = b"".join(body_parts).decode(errors="replace")
-            params = _parse_qs(body)
-            token_in_body = (params.get("token") or [""])[0]
-            expected_token = os.environ.get("SLACK_PRICE_CHECK_TOKEN", "")
-            if not expected_token or token_in_body != expected_token:
-                resp_body = b"Unauthorized"
-                await send({"type": "http.response.start", "status": 401,
-                            "headers": [[b"content-type", b"text/plain"]]})
-                await send({"type": "http.response.body", "body": resp_body})
-                return
+            raw_body = b"".join(body_parts)
+
+            # Verify request comes from Slack using Signing Secret
+            signing_secret = os.environ.get("SLACK_PRICE_CHECK_TOKEN", "").encode()
+            if signing_secret:
+                headers_dict = {k.decode(): v.decode() for k, v in scope.get("headers", [])}
+                timestamp = headers_dict.get("x-slack-request-timestamp", "")
+                slack_sig = headers_dict.get("x-slack-signature", "")
+                sig_basestring = f"v0:{timestamp}:{raw_body.decode()}".encode()
+                expected = "v0=" + hmac.new(signing_secret, sig_basestring, hashlib.sha256).hexdigest()
+                if not hmac.compare_digest(expected, slack_sig):
+                    await send({"type": "http.response.start", "status": 401,
+                                "headers": [[b"content-type", b"text/plain"]]})
+                    await send({"type": "http.response.body", "body": b"Unauthorized"})
+                    return
+
             # Respond immediately to Slack (must reply within 3 s)
             ack = ":hourglass: Startar priskoll\u2026".encode("utf-8")
             await send({"type": "http.response.start", "status": 200,
