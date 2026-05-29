@@ -15,10 +15,10 @@ Environment variables:
 """
 
 import os
+import sys
 import json
 import logging
 from datetime import date
-from server import get_lunch_guide
 
 import psycopg2
 from psycopg2.extras import execute_values
@@ -81,9 +81,17 @@ def ensure_tables(conn):
 # ---------------------------------------------------------------------------
 
 def fetch_restaurants(city: str) -> list[dict]:
-    """Call the MCP tool directly and parse the JSON result."""
-    raw = get_lunch_guide(city)
-    return json.loads(raw)
+    """Fetch lunch data by calling matochmat.se directly (no MCP import needed)."""
+    import httpx
+    from bs4 import BeautifulSoup
+    # Add project root to path so we can reuse parsing helpers from server.py
+    sys.path.insert(0, os.path.dirname(__file__))
+    from server import _fetch, _parse_lunch_page
+    try:
+        html = _fetch(f"https://www.matochmat.se/lunch/{city}/")
+        return _parse_lunch_page(html)
+    except Exception as e:
+        return [{"error": str(e)}]
 
 
 def get_previous_prices(conn, city: str) -> dict[tuple, int]:
@@ -163,7 +171,7 @@ def main():
     today = date.today()
     log.info(f"Price tracker starting — snapshot date: {today}")
 
-    from server import list_cities
+    from server import list_cities, _fetch, _parse_lunch_page
     cities = TRACK_CITIES or list(list_cities().keys())
     log.info(f"Tracking {len(cities)} cities: {', '.join(cities)}")
 
