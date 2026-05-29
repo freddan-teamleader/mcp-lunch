@@ -748,23 +748,16 @@ def _fetch_mylunch(city: str) -> list[dict]:
     ml_city = MYLUNCH_CITY_MAP.get(city)
     if not ml_city:
         return []
-
-    # Fast path: city overview page (16 results with per-dish prices)
-    city_page: list[dict] = []
     try:
         html = _fetch(f"{MYLUNCH_BASE}/{ml_city}/")
-        city_page = _parse_mylunch_page(html, city)
+        restaurants = _parse_mylunch_page(html, city)
+        # Filter out SVG placeholder logos
+        for r in restaurants:
+            if r.get("logo", "").startswith("data:image/svg"):
+                r["logo"] = ""
+        return restaurants
     except Exception:
-        pass
-
-    # Extended path: fetch remaining restaurants from sitemap if city page is sparse
-    known_slugs = {r["slug"] for r in city_page}
-    total_in_sitemap = len(_get_mylunch_slugs(ml_city))
-    if total_in_sitemap > len(city_page):
-        extras = _fetch_mylunch_full(ml_city, known_slugs)
-        return city_page + extras
-
-    return city_page
+        return []
 
 
 def _merge_sources(matochmat: list[dict], mylunch: list[dict]) -> list[dict]:
