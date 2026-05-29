@@ -405,6 +405,184 @@ def _simple_text_parse(html: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# mylunch.se parser
+# ---------------------------------------------------------------------------
+
+MYLUNCH_BASE = "https://www.mylunch.se"
+
+# Maps our city slugs to mylunch.se city slugs (most are identical)
+MYLUNCH_CITY_MAP: dict[str, str] = {
+    "pitea": "pitea",
+    "lulea": "lulea",
+    "skelleftea": "skelleftea",
+    "umea": "umea",
+    "kiruna": "kiruna",
+    "boden": "boden",
+    "sundsvall": "sundsvall",
+    "ornskoldsvik": "ornskoldsvik",
+    "gavle": "gavle",
+    "ostersund": "ostersund",
+    "hudiksvall": "hudiksvall",
+    "norrtalje": "norrtalje",
+    "soderhamn": "soderhamn",
+    "bollnas": "bollnas",
+    "falun": "falun",
+    "borlange": "borlange",
+    "vasteras": "vasteras",
+    "orebro": "orebro",
+    "eskilstuna": "eskilstuna",
+    "karlskoga": "karlskoga",
+    "stockholm": "stockholm",
+    "uppsala": "uppsala",
+    "linkoping": "linkoping",
+    "norrkoping": "norrkoping",
+    "jonkoping": "jonkoping",
+    "vaxjo": "vaxjo",
+    "kalmar": "kalmar",
+    "goteborg": "goteborg",
+    "boras": "boras",
+    "malmo": "malmo",
+    "helsingborg": "helsingborg",
+    "lund": "lund",
+    "kristianstad": "kristianstad",
+    "karlskrona": "karlskrona",
+    "karlshamn": "karlshamn",
+    "halmstad": "halmstad",
+    "varberg": "varberg",
+}
+
+
+def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
+    """
+    Parse mylunch.se city page into the same restaurant/dish format as matochmat.
+    Each restaurant is an <h2> with an <a> link, followed by dish text.
+    """
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
+
+    price_re = re.compile(r"(\d{2,3})\s*[Kk]r", re.IGNORECASE)
+    tag_re = re.compile(
+        r"\b(GF|LF|MF|vegetarisk|vegansk|vegan|glutenfri|laktosfri)\b", re.IGNORECASE
+    )
+    tag_map = {
+        "gf": "glutenfri", "lf": "laktosfri", "mf": "mjölkfri",
+        "vegetarisk": "vegetarisk", "vegansk": "vegansk", "vegan": "vegansk",
+        "glutenfri": "glutenfri", "laktosfri": "laktosfri",
+    }
+
+    restaurants = []
+    seen_names: set[str] = set()
+
+    for h2 in soup.find_all("h2"):
+        a = h2.find("a")
+        if not a:
+            continue
+        name = a.get_text(strip=True)
+        if not name or name.lower() in seen_names:
+            continue
+        seen_names.add(name.lower())
+
+        href = a.get("href", "")
+        url = f"{MYLUNCH_BASE}{href}" if href.startswith("/") else href
+
+        # Collect text nodes between this h2 and the next h2/hr
+        dishes = []
+        node = h2.find_next_sibling()
+        while node and node.name not in ("h2",):
+            text = node.get_text(separator="\n", strip=True)
+            for raw_line in text.splitlines():
+                line = raw_line.strip()
+                if not line or len(line) > 200:
+                    continue
+
+                # Extract price
+                price = None
+                price_match = price_re.search(line)
+                if price_match:
+                    price = int(price_match.group(1))
+
+                # Extract dietary tags
+                tags = []
+                is_veg = False
+                for m in tag_re.finditer(line):
+                    t = tag_map.get(m.group(1).lower(), m.group(1).lower())
+                    if t not in tags:
+                        tags.append(t)
+                    if t in ("vegetarisk", "vegansk", "vegan"):
+                        is_veg = True
+
+                # Clean line – remove price and tag tokens for dish name
+                dish_name = price_re.sub("", line).strip(" :-")
+                dish_name = re.sub(r"\b(GF|LF|MF)\b", "", dish_name, flags=re.IGNORECASE).strip()
+                if not dish_name:
+                    continue
+
+                dishes.append({
+                    "name": dish_name,
+                    "price": price,
+                    "vegetarian": is_veg,
+                    "tags": tags,
+                    "closed": False,
+                })
+            node = node.find_next_sibling()
+
+        if not dishes:
+            continue
+
+        # Build slug from name
+        slug = name.lower()
+        for fr, to in [("å","a"),("ä","a"),("ö","o"),("é","e"),(" ","-")]:
+            slug = slug.replace(fr, to)
+        slug = re.sub(r"[^a-z0-9-]+", "", slug).strip("-")
+
+        restaurants.append({
+            "name": name,
+            "slug": slug,
+            "city": city_slug,
+            "logo": "",
+            "url": url,
+            "source": "mylunch.se",
+            "dishes": dishes,
+        })
+
+    return restaurants
+
+
+def _fetch_mylunch(city: str) -> list[dict]:
+    """Fetch and parse mylunch.se for a given city slug."""
+    ml_city = MYLUNCH_CITY_MAP.get(city)
+    if not ml_city:
+        return []
+    try:
+        html = _fetch(f"{MYLUNCH_BASE}/{ml_city}/")
+        return _parse_mylunch_page(html, city)
+    except Exception:
+        return []
+
+
+def _merge_sources(matochmat: list[dict], mylunch: list[dict]) -> list[dict]:
+    """
+    Merge two restaurant lists, deduplicating by name similarity.
+    Restaurants only in mylunch get source='mylunch.se'.
+    Restaurants in matochmat get source='matochmat.se'.
+    """
+    def _norm(name: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", name.lower())
+
+    existing = {_norm(r["name"]) for r in matochmat}
+    merged = [{**r, "source": "matochmat.se"} for r in matochmat]
+
+    for r in mylunch:
+        if _norm(r["name"]) not in existing:
+            merged.append(r)
+
+    return merged
+
+
+# ---------------------------------------------------------------------------
 # MCP Tools
 # ---------------------------------------------------------------------------
 
@@ -468,6 +646,46 @@ def get_lunch_guide(city: str) -> str:
 
     _cache_set(cache_key, restaurants)
     return json.dumps(restaurants, ensure_ascii=False)
+
+
+@mcp.tool()
+def get_lunch_guide_extended(city: str) -> str:
+    """
+    Get today's lunch menus from multiple sources (matochmat.se + mylunch.se),
+    merged and deduplicated. Returns more restaurants than get_lunch_guide.
+
+    Each restaurant has an added field:
+      - source (str): "matochmat.se" or "mylunch.se"
+
+    Args:
+        city: City slug (e.g. "kalmar", "stockholm"). Use list_cities() for valid slugs.
+    """
+    city = city.lower().strip()
+
+    cache_key = f"lunch_ext:{city}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return json.dumps(cached, ensure_ascii=False)
+
+    # Fetch matochmat
+    matochmat: list[dict] = []
+    try:
+        html = _fetch(f"{BASE_URL}/lunch/{city}/")
+        matochmat = _parse_lunch_page(html)
+        _cache_set(f"lunch:{city}", matochmat)
+    except Exception:
+        pass
+
+    # Fetch mylunch
+    mylunch = _fetch_mylunch(city)
+
+    merged = _merge_sources(matochmat, mylunch)
+
+    if not merged:
+        return json.dumps([{"error": f"No lunch data found for '{city}' from any source."}])
+
+    _cache_set(cache_key, merged)
+    return json.dumps(merged, ensure_ascii=False)
 
 
 @mcp.tool()
