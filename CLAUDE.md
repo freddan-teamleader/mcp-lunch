@@ -106,6 +106,23 @@ Every source (aggregator or own-site) must produce this shape so the JSON stays 
 }
 ```
 
+## Logos
+
+Aim to give **every restaurant a usable logo** in the `logo` field.
+
+- Aggregator restaurants: logos are relative paths under matochmat
+  (`/assets/uploads/...`); `get_logos(city)` turns them into base64 data URLs.
+- Own-site restaurants: use an absolute `https://` URL to a logo asset.
+  Prefer a mark that reads on **both light and dark backgrounds** — avoid
+  variants tuned for one background (e.g. a cream/white mark disappears on the
+  light card surfaces most clients render). For Byttan we use
+  `byttan_emblem.svg` (the colored emblem), not the cream or black-only variants.
+- Known limitation: `get_logos()` builds `BASE_URL + logo`, so it does **not**
+  resolve absolute own-site URLs (they'd get the matochmat prefix prepended and
+  fail, silently skipped). Clients that read the `logo` field directly (e.g. the
+  lunch cards) still render own-site logos fine. If base64 logos for own-site
+  restaurants are needed, add an "already absolute → fetch as-is" branch in `get_logos`.
+
 ## Caching & TTLs
 
 - `_cache` (in-memory): lunch data + logos, `CACHE_TTL = 1800` (30 min).
