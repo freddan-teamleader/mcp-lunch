@@ -951,6 +951,16 @@ def _parse_byttan_weekly(html: str) -> dict:
         # sentence ending in a period. Dish names do neither.
         return s.lower().startswith("med ") or s.rstrip().endswith(".")
 
+    def _is_noise(s: str) -> bool:
+        # Standalone time ranges ("11.30–15.00") and bare prices ("299 kr")
+        # are layout fragments, not dishes. Hyphen variants: -, – , —.
+        t = s.strip().lower().replace("\u2013", "-").replace("\u2014", "-")
+        if re.fullmatch(r"\d{1,2}[.:]\d{2}\s*-\s*\d{1,2}[.:]\d{2}", t):
+            return True
+        if re.fullmatch(r"\d+\s*kr", t):
+            return True
+        return False
+
     def _slice(after: str, until: set[str]) -> list[str]:
         try:
             i0 = next(i for i, l in enumerate(lines) if l.lower() == after)
@@ -974,7 +984,7 @@ def _parse_byttan_weekly(html: str) -> dict:
             cur_day = low
             days.setdefault(cur_day, [])
             veg_next = False
-        elif cur_day is None:
+        elif cur_day is None or _is_noise(l):
             continue
         elif low == "vegetariskt":
             veg_next = True
@@ -997,7 +1007,8 @@ def _parse_byttan_weekly(html: str) -> dict:
     helg: list[dict] = []
     for l in _slice("helglunch", {"bistro", "sällskap"}):
         low = l.lower()
-        if "inkl." in low or low.startswith("lördag") or low.startswith("helglunch"):
+        if (_is_noise(l) or "inkl." in low
+                or low.startswith("lördag") or low.startswith("helglunch")):
             continue
         if _is_desc(l) and helg:
             helg[-1]["name"] = f'{helg[-1]["name"]} – {l.rstrip(".")}'
