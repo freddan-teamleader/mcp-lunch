@@ -108,6 +108,10 @@ Menus are merged from multiple sources:
 - **Own-site restaurants** — restaurants that publish their menu only on their
   own website get a small dedicated parser. Currently:
   - **Byttan i Parken** (Kalmar) — `byttaniparken.se`, slug `byttan-i-parken`.
+  - **Gubben i Matlådan** (Färjestaden) — `gubbenimatladan.se`, slug `gubben-i-matladan`.
+
+Färjestaden has no aggregator coverage, so its guide (`get_lunch_guide("farjestaden")`)
+is built entirely from own-site sources.
 
 To add another own-site restaurant, see the *Custom single-restaurant sources*
 section in `server.py`: write a `_fetch_<name>_today()` (and optional weekly-text)

@@ -120,6 +120,7 @@ CITIES: dict[str, str] = {
     "jonkoping": "Jönköping",
     "vaxjo": "Växjö",
     "kalmar": "Kalmar",
+    "farjestaden": "Färjestaden",
     "goteborg": "Göteborg",
     "boras": "Borås",
     "trollhattan": "Trollhättan",
@@ -1103,19 +1104,191 @@ def _byttan_weekly_text() -> str:
     return "\n".join(out)
 
 
+# ── Gubben i Matlådan (Färjestaden) ─────────────────────────────────
+GUBBEN_URL = "https://gubbenimatladan.se/"
+GUBBEN_SLUG = "gubben-i-matladan"
+GUBBEN_LOGO = "https://gubbenimatladan.se/wp-content/uploads/2024/03/cropped-Fav_gubbenimatladan_512px-270x270.png"
+_GUBBEN_WEEKDAYS = ("måndag", "tisdag", "onsdag", "torsdag", "fredag")
+_GUBBEN_DAGENS_PRICE = 139  # eat-in; take-away is cheaper but we report eat-in
+
+
+def _parse_gubben_weekly(html: str) -> dict:
+    """
+    Parse Gubben i Matlådan's site into a weekly lunch structure.
+
+    Returns `{"days": {...}, "standing": [veckans pasta, veckans fisk]}`.
+    The page lists "DAGENS RÄTT V<n>" with MÅNDAG..FREDAG, then VECKANS PASTA
+    and VECKANS FISK (available all week → standing). Text-anchor based.
+    """
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
+    lines = [l.strip() for l in soup.get_text("\n").splitlines() if l.strip()]
+
+    END = {"meny", "restaurangen", "välkommen!", "välkommen",
+           "händer hos gubben", "foodtruck", "catering"}
+
+    # Start at the weekly "DAGENS RÄTT V<n>" heading (not the "Dagens lunch" nav).
+    start = next(
+        (i for i, l in enumerate(lines) if l.lower().startswith("dagens rätt")),
+        None,
+    )
+    if start is None:
+        return {"days": {}, "standing": []}
+
+    days_raw: dict[str, list[str]] = {}
+    pasta_raw: list[str] = []
+    fisk_raw: list[str] = []
+    pasta_price: int | None = None
+    fisk_price: int | None = None
+    mode: str | None = None  # "day:<name>" | "pasta" | "fisk"
+
+    def _first_kr(s: str) -> int | None:
+        m = re.search(r"(\d+)\s*kr", s.lower())
+        return int(m.group(1)) if m else None
+
+    for l in lines[start + 1:]:
+        low = l.lower()
+        if low in END:
+            break
+        if low in _GUBBEN_WEEKDAYS:
+            mode = f"day:{low}"
+            days_raw.setdefault(low, [])
+            continue
+        if low.startswith("veckans pasta"):
+            mode = "pasta"
+            continue
+        if low.startswith("veckans fisk"):
+            mode = "fisk"
+            continue
+        if low.startswith("äta här") or low.startswith("take away"):
+            price = _first_kr(l)  # first number = eat-in price
+            if mode == "pasta":
+                pasta_price = price
+            elif mode == "fisk":
+                fisk_price = price
+            continue
+        # content line (dish name or description)
+        if mode and mode.startswith("day:"):
+            days_raw[mode[4:]].append(l)
+        elif mode == "pasta":
+            pasta_raw.append(l)
+        elif mode == "fisk":
+            fisk_raw.append(l)
+
+    def _compose(seg: list[str], price: int | None, label: str = "") -> dict | None:
+        if not seg:
+            return None
+        name = (f"{label}: " if label else "") + seg[0]
+        if len(seg) > 1:
+            desc = " ".join(s.rstrip(".") for s in seg[1:])
+            name = f"{name} – {desc}"
+        veg = bool(re.search(r"vegetar|vegan", name, re.I))
+        return {"name": name.rstrip(" ."), "price": price, "vegetarian": veg,
+                "tags": ["vegetarisk"] if veg else [], "closed": False}
+
+    days: dict[str, list[dict]] = {}
+    for d, seg in days_raw.items():
+        dish = _compose(seg, _GUBBEN_DAGENS_PRICE)
+        if dish:
+            days[d] = [dish]
+
+    standing: list[dict] = []
+    pasta = _compose(pasta_raw, pasta_price or _GUBBEN_DAGENS_PRICE, "Veckans pasta")
+    fisk = _compose(fisk_raw, fisk_price, "Veckans fisk")
+    if pasta:
+        standing.append(pasta)
+    if fisk:
+        standing.append(fisk)
+
+    return {"days": days, "standing": standing}
+
+
+def _fetch_gubben_today(city_slug: str) -> dict | None:
+    """Today's lunch for Gubben i Matlådan, in the standard restaurant shape."""
+    try:
+        html = _fetch(GUBBEN_URL)
+    except Exception:
+        return None
+
+    weekly = _parse_gubben_weekly(html)
+    today = _today_sv()
+
+    if today == "söndag":
+        dishes = [{"name": "Söndagsstängt", "price": None, "vegetarian": False,
+                   "tags": [], "closed": True}]
+    elif today == "lördag":
+        # Open Sat but no weekday "dagens" — show the week's pasta/fish.
+        dishes = list(weekly["standing"])
+    else:
+        dishes = list(weekly["days"].get(today, [])) + list(weekly["standing"])
+
+    if not dishes:
+        return None
+
+    return {
+        "name": "Gubben i Matlådan",
+        "slug": GUBBEN_SLUG,
+        "city": city_slug,
+        "logo": GUBBEN_LOGO,
+        "url": GUBBEN_URL,
+        "source": "gubbenimatladan.se",
+        "dishes": dishes,
+    }
+
+
+def _gubben_weekly_text() -> str:
+    """Full weekly lunch menu for Gubben i Matlådan as plain text."""
+    try:
+        html = _fetch(GUBBEN_URL)
+    except Exception as e:
+        return f"Error: Could not fetch Gubben i Matlådan menu: {e}"
+
+    w = _parse_gubben_weekly(html)
+    order = [("Måndag", "måndag"), ("Tisdag", "tisdag"), ("Onsdag", "onsdag"),
+             ("Torsdag", "torsdag"), ("Fredag", "fredag")]
+    out = [
+        "Gubben i Matlådan – Veckans lunch",
+        "Ölands Köpstad / brofästet, Färjestaden",
+        "Mån–fre 09–17 · lör 09–16 · sön stängt",
+        "",
+    ]
+    for label, key in order:
+        out.append(label)
+        items = w["days"].get(key, [])
+        if items:
+            for d in items:
+                price = f' ({d["price"]} kr)' if d.get("price") else ""
+                out.append(f'  • {d["name"]}{price}')
+        else:
+            out.append("  • (ingen lunchinfo för dagen)")
+        out.append("")
+    if w["standing"]:
+        out.append("Hela veckan:")
+        for d in w["standing"]:
+            price = f' ({d["price"]} kr)' if d.get("price") else ""
+            out.append(f'  • {d["name"]}{price}')
+    return "\n".join(out)
+
+
 # Registry: city slug → list of custom-source keys to merge into get_lunch_guide
 CUSTOM_SOURCES: dict[str, list[str]] = {
     "kalmar": ["byttan"],
+    "farjestaden": ["gubben"],
 }
 
 # key → today's-menu fetcher  (used by get_lunch_guide)
 _CUSTOM_TODAY_FETCHERS = {
     "byttan": _fetch_byttan_today,
+    "gubben": _fetch_gubben_today,
 }
 
 # restaurant slug → weekly-text fetcher  (used by get_restaurant_menu)
 _CUSTOM_MENU_FETCHERS = {
     BYTTAN_SLUG: _byttan_weekly_text,
+    GUBBEN_SLUG: _gubben_weekly_text,
 }
 
 
