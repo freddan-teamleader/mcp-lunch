@@ -901,6 +901,230 @@ def _merge_sources(matochmat: list[dict], mylunch: list[dict]) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Custom single-restaurant sources
+# ---------------------------------------------------------------------------
+#
+# Some restaurants are not listed on the aggregator sites (matochmat.se /
+# mylunch.se) and publish their menu only on their own website. Each such
+# restaurant gets a small dedicated parser registered here. The parsers are
+# text-anchor based (not CSS-class based) so they survive minor markup
+# changes on the source site.
+#
+# To add another own-site restaurant:
+#   1. Write a `_fetch_<name>_today(city_slug) -> dict | None` returning a
+#      restaurant dict in the standard shape (today's dishes).
+#   2. (optional) Write a weekly-text function for get_restaurant_menu.
+#   3. Register both in the maps at the bottom of this section.
+# ---------------------------------------------------------------------------
+
+BYTTAN_URL = "https://www.byttaniparken.se/meny"
+BYTTAN_SLUG = "byttan-i-parken"
+_BYTTAN_WEEKDAYS = ("måndag", "tisdag", "onsdag", "torsdag", "fredag")
+
+
+def _parse_byttan_weekly(html: str) -> dict:
+    """
+    Parse Byttan i Parken's single-page menu into a weekly lunch structure.
+
+    Returns:
+      {
+        "days": { "tisdag": [dish, ...], ..., "helg": [dish, ...] },
+        "standing": [dish, ...],   # always-available items (soup)
+      }
+
+    Text-anchor based: keys off the Swedish section labels ("Veckans lunch",
+    weekday names, "Helglunch") and the next top-level section ("Bistro"),
+    rather than fragile CSS classes.
+    """
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
+    lines = [l.strip() for l in soup.get_text("\n").splitlines() if l.strip()]
+
+    PRICE_WEEKDAY = 149
+    PRICE_WEEKEND = 299
+
+    def _is_desc(s: str) -> bool:
+        # Description lines either lead with "Med ..." or read as a full
+        # sentence ending in a period. Dish names do neither.
+        return s.lower().startswith("med ") or s.rstrip().endswith(".")
+
+    def _slice(after: str, until: set[str]) -> list[str]:
+        try:
+            i0 = next(i for i, l in enumerate(lines) if l.lower() == after)
+        except StopIteration:
+            return []
+        out: list[str] = []
+        for l in lines[i0 + 1:]:
+            if l.lower() in until:
+                break
+            out.append(l)
+        return out
+
+    days: dict[str, list[dict]] = {}
+
+    # ── Weekday lunch: between "Veckans lunch" and "Helglunch" ──────────
+    cur_day: str | None = None
+    veg_next = False
+    for l in _slice("veckans lunch", {"helglunch", "bistro"}):
+        low = l.lower()
+        if low in _BYTTAN_WEEKDAYS:
+            cur_day = low
+            days.setdefault(cur_day, [])
+            veg_next = False
+        elif cur_day is None:
+            continue
+        elif low == "vegetariskt":
+            veg_next = True
+        elif low == "byttan abonnerad":
+            days[cur_day].append({
+                "name": "Byttan abonnerad (lunchstängt)",
+                "price": None, "vegetarian": False, "tags": [], "closed": True,
+            })
+        elif _is_desc(l) and days[cur_day]:
+            prev = days[cur_day][-1]
+            prev["name"] = f'{prev["name"]} – {l.rstrip(".")}'
+        else:
+            days[cur_day].append({
+                "name": l, "price": PRICE_WEEKDAY, "vegetarian": veg_next,
+                "tags": ["vegetarisk"] if veg_next else [], "closed": False,
+            })
+            veg_next = False
+
+    # ── Weekend set menu: between "Helglunch" and "Bistro"/"Sällskap" ───
+    helg: list[dict] = []
+    for l in _slice("helglunch", {"bistro", "sällskap"}):
+        low = l.lower()
+        if "inkl." in low or low.startswith("lördag") or low.startswith("helglunch"):
+            continue
+        if _is_desc(l) and helg:
+            helg[-1]["name"] = f'{helg[-1]["name"]} – {l.rstrip(".")}'
+        else:
+            helg.append({
+                "name": l, "price": PRICE_WEEKEND, "vegetarian": False,
+                "tags": [], "closed": False,
+            })
+    if helg:
+        days["helg"] = helg
+
+    # ── Always-available items (weekly soup) ────────────────────────────
+    standing: list[dict] = []
+    for l in lines:
+        if l.lower().startswith("veckans soppa"):
+            standing.append({
+                "name": "Veckans soppa med bröd och sallad",
+                "price": 130, "vegetarian": False, "tags": [], "closed": False,
+            })
+            break
+
+    return {"days": days, "standing": standing}
+
+
+def _fetch_byttan_today(city_slug: str) -> dict | None:
+    """Today's lunch for Byttan i Parken, in the standard restaurant shape."""
+    try:
+        html = _fetch(BYTTAN_URL)
+    except Exception:
+        return None
+
+    weekly = _parse_byttan_weekly(html)
+    today = _today_sv()
+
+    if today in ("lördag", "söndag"):
+        dishes = list(weekly["days"].get("helg", []))
+    elif today == "måndag":
+        # Lunch is served tis–fre only; café is still open.
+        dishes = [{
+            "name": "Lunch serveras tis–fre 11.30–14.30 (caféet öppet som vanligt)",
+            "price": None, "vegetarian": False, "tags": [], "closed": False,
+        }] + list(weekly["standing"])
+    else:
+        dishes = list(weekly["days"].get(today, [])) + list(weekly["standing"])
+
+    if not dishes:
+        return None
+
+    return {
+        "name": "Byttan i Parken",
+        "slug": BYTTAN_SLUG,
+        "city": city_slug,
+        "logo": "https://www.byttaniparken.se/assets/logo/byttan_logo_black.png",
+        "url": BYTTAN_URL,
+        "source": "byttaniparken.se",
+        "dishes": dishes,
+    }
+
+
+def _byttan_weekly_text() -> str:
+    """Full weekly lunch menu for Byttan i Parken as plain text."""
+    try:
+        html = _fetch(BYTTAN_URL)
+    except Exception as e:
+        return f"Error: Could not fetch Byttan i Parken menu: {e}"
+
+    w = _parse_byttan_weekly(html)
+    order = [
+        ("Tisdag", "tisdag"), ("Onsdag", "onsdag"), ("Torsdag", "torsdag"),
+        ("Fredag", "fredag"), ("Lördag & söndag (Helglunch)", "helg"),
+    ]
+    out = [
+        "Byttan i Parken – Veckans lunch",
+        "Slottsvägen 6, 392 33 Kalmar (Stadsparken)",
+        "Lunch tis–fre 11.30–14.30 · Helglunch lör–sön 11.30–15.00",
+        "",
+    ]
+    for label, key in order:
+        out.append(label)
+        items = w["days"].get(key, [])
+        if items:
+            for d in items:
+                price = f' ({d["price"]} kr)' if d.get("price") else ""
+                out.append(f'  • {d["name"]}{price}')
+        else:
+            out.append("  • (ingen lunchinfo för dagen)")
+        out.append("")
+    if w["standing"]:
+        out.append("Alltid:")
+        for d in w["standing"]:
+            out.append(f'  • {d["name"]} ({d["price"]} kr)')
+    return "\n".join(out)
+
+
+# Registry: city slug → list of custom-source keys to merge into get_lunch_guide
+CUSTOM_SOURCES: dict[str, list[str]] = {
+    "kalmar": ["byttan"],
+}
+
+# key → today's-menu fetcher  (used by get_lunch_guide)
+_CUSTOM_TODAY_FETCHERS = {
+    "byttan": _fetch_byttan_today,
+}
+
+# restaurant slug → weekly-text fetcher  (used by get_restaurant_menu)
+_CUSTOM_MENU_FETCHERS = {
+    BYTTAN_SLUG: _byttan_weekly_text,
+}
+
+
+def _fetch_custom_sources(city: str) -> list[dict]:
+    """Return today's-menu dicts for any own-site restaurants in `city`."""
+    out: list[dict] = []
+    for key in CUSTOM_SOURCES.get(city, []):
+        fn = _CUSTOM_TODAY_FETCHERS.get(key)
+        if fn is None:
+            continue
+        try:
+            r = fn(city)
+        except Exception:
+            r = None
+        if r:
+            out.append(r)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # MCP Tools
 # ---------------------------------------------------------------------------
 
@@ -961,6 +1185,16 @@ def get_lunch_guide(city: str) -> str:
     mylunch = _fetch_mylunch(city)
 
     merged = _merge_sources(matochmat, mylunch)
+
+    # Own-site restaurants not present on the aggregators
+    custom = _fetch_custom_sources(city)
+    if custom:
+        def _norm(name: str) -> str:
+            return re.sub(r"[^a-z0-9]", "", name.lower())
+        existing = {_norm(r["name"]) for r in merged}
+        for r in custom:
+            if _norm(r["name"]) not in existing:
+                merged.append(r)
 
     if not merged:
         return json.dumps([{"error": f"No lunch data found for city '{city}'. Try a different slug."}])
@@ -1203,6 +1437,11 @@ def get_restaurant_menu(city: str, restaurant: str) -> str:
     """
     city = city.lower().strip()
     restaurant = restaurant.lower().strip()
+
+    # Own-site restaurants have a dedicated weekly-menu fetcher
+    if restaurant in _CUSTOM_MENU_FETCHERS:
+        return _CUSTOM_MENU_FETCHERS[restaurant]()
+
     url = f"{BASE_URL}/lunch/{city}/{restaurant}/"
 
     try:

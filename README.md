@@ -100,6 +100,21 @@ Run `list_cities` to get the full list. Some examples:
 
 `umea`, `stockholm`, `goteborg`, `malmo`, `linkoping`, `lulea`, `skelleftea`, `ostersund`, `gavle`, `sundsvall`, `vasteras`, `orebro`, `uppsala`, `helsingborg`, `lund`, `karlskrona`, `jonkoping`, `vaxjo`, `boras` and many more.
 
+## Data sources
+
+Menus are merged from multiple sources:
+
+- **matochmat.se** and **mylunch.se** — aggregator sites covering most cities.
+- **Own-site restaurants** — restaurants that publish their menu only on their
+  own website get a small dedicated parser. Currently:
+  - **Byttan i Parken** (Kalmar) — `byttaniparken.se`, slug `byttan-i-parken`.
+
+To add another own-site restaurant, see the *Custom single-restaurant sources*
+section in `server.py`: write a `_fetch_<name>_today()` (and optional weekly-text)
+function and register it in `CUSTOM_SOURCES` / `_CUSTOM_TODAY_FETCHERS` /
+`_CUSTOM_MENU_FETCHERS`. The parsers are text-anchor based (keyed off Swedish
+section labels) rather than CSS-class based, so they tolerate minor markup changes.
+
 ## Deploy to Railway (free)
 
 Railway lets you host the server in the cloud so any machine can use it without a local Python install.
