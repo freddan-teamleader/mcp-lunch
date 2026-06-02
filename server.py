@@ -1061,7 +1061,7 @@ def _fetch_byttan_today(city_slug: str) -> dict | None:
         "name": "Byttan i Parken",
         "slug": BYTTAN_SLUG,
         "city": city_slug,
-        "logo": "https://www.byttaniparken.se/assets/logo/byttan_logo_black.png",
+        "logo": "https://www.byttaniparken.se/assets/logo/byttan_emblem.svg",
         "url": BYTTAN_URL,
         "source": "byttaniparken.se",
         "dishes": dishes,
