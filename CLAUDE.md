@@ -117,11 +117,13 @@ Aim to give **every restaurant a usable logo** in the `logo` field.
   variants tuned for one background (e.g. a cream/white mark disappears on the
   light card surfaces most clients render). For Byttan we use
   `byttan_emblem.svg` (the colored emblem), not the cream or black-only variants.
-- Known limitation: `get_logos()` builds `BASE_URL + logo`, so it does **not**
-  resolve absolute own-site URLs (they'd get the matochmat prefix prepended and
-  fail, silently skipped). Clients that read the `logo` field directly (e.g. the
-  lunch cards) still render own-site logos fine. If base64 logos for own-site
-  restaurants are needed, add an "already absolute → fetch as-is" branch in `get_logos`.
+- `_fetch_logo_data_url(path)` is the shared helper: relative paths get the
+  matochmat prefix, absolute URLs are fetched as-is. Both `get_logos` and
+  `get_logo` use it, so own-site logos resolve correctly.
+- **`get_logos(city)`** returns every logo in one dict — for a city with many
+  restaurants this can exceed the ~1 MB tool-response limit. To embed a logo in
+  a size-constrained context (e.g. an inline chat widget), use
+  **`get_logo(city, restaurant)`** which returns a single restaurant's data URL.
 
 ## Caching & TTLs
 

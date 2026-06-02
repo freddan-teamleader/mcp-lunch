@@ -1416,31 +1416,76 @@ def get_logos(city: str) -> str:
 
     restaurants: list[dict] = _cache_get(f"lunch:{city}") or []  # type: ignore[assignment]
     if not restaurants:
-        try:
-            html = _fetch(f"{BASE_URL}/lunch/{city}/")
-        except httpx.HTTPStatusError:
-            return json.dumps({})
-        restaurants = _parse_lunch_page(html)
-        _cache_set(f"lunch:{city}", restaurants)
+        get_lunch_guide(city)  # builds + caches the full merged guide (incl. own-site)
+        restaurants = _cache_get(f"lunch:{city}") or []  # type: ignore[assignment]
 
     result: dict[str, str] = {}
-    with httpx.Client(follow_redirects=True, timeout=10) as client:
-        for r in restaurants:
-            slug = r.get("slug", "")
-            path = r.get("logo", "")
-            if not (slug and path):
-                continue
-            try:
-                resp = client.get(f"{BASE_URL}{path}", headers=HEADERS)
-                resp.raise_for_status()
-                ct = resp.headers.get("content-type", "image/jpeg").split(";")[0]
-                b64 = base64.b64encode(resp.content).decode()
-                result[slug] = f"data:{ct};base64,{b64}"
-            except Exception:
-                pass
+    for r in restaurants:
+        slug = r.get("slug", "")
+        if not slug:
+            continue
+        data_url = _fetch_logo_data_url(r.get("logo", ""))
+        if data_url:
+            result[slug] = data_url
 
     _cache_set(cache_key, result)
     return json.dumps(result, ensure_ascii=False)
+
+
+def _fetch_logo_data_url(path: str) -> str | None:
+    """
+    Fetch a logo and return it as a base64 data URL, or None on failure / empty.
+    Accepts relative matochmat paths ("/assets/...") and absolute own-site URLs.
+    """
+    if not path:
+        return None
+    url = path if path.startswith(("http://", "https://")) else f"{BASE_URL}{path}"
+    try:
+        with httpx.Client(follow_redirects=True, timeout=10) as client:
+            resp = client.get(url, headers=HEADERS)
+            resp.raise_for_status()
+            ct = resp.headers.get("content-type", "image/jpeg").split(";")[0]
+            return f"data:{ct};base64,{base64.b64encode(resp.content).decode()}"
+    except Exception:
+        return None
+
+
+@mcp.tool()
+def get_logo(city: str, restaurant: str) -> str:
+    """
+    Get a single restaurant's logo as a base64 data URL.
+
+    Unlike get_logos (which returns every logo in a city and can exceed response
+    size limits), this fetches just one restaurant — small enough to embed
+    directly. Handles both aggregator logos (relative paths) and own-site logos
+    (absolute URLs, e.g. Byttan / Gubben).
+
+    Args:
+        city: City slug. Use list_cities() for valid slugs.
+        restaurant: Restaurant slug from get_lunch_guide().
+
+    Returns:
+        A JSON string: {"slug": <slug>, "logo": "data:<mime>;base64,..." | null}.
+        Use the data URL directly as an <img src> — works in sandboxed iframes.
+    """
+    city = city.lower().strip()
+    restaurant = restaurant.lower().strip()
+
+    restaurants: list[dict] = _cache_get(f"lunch:{city}") or []  # type: ignore[assignment]
+    if not restaurants:
+        get_lunch_guide(city)  # builds + caches the full merged guide (incl. own-site)
+        restaurants = _cache_get(f"lunch:{city}") or []  # type: ignore[assignment]
+
+    target = next((r for r in restaurants if r.get("slug") == restaurant), None)
+    if target is None:
+        return json.dumps(
+            {"slug": restaurant, "logo": None,
+             "error": f"Restaurant '{restaurant}' not found in '{city}'."},
+            ensure_ascii=False,
+        )
+
+    data_url = _fetch_logo_data_url(target.get("logo", ""))
+    return json.dumps({"slug": restaurant, "logo": data_url}, ensure_ascii=False)
 
 
 # ---------------------------------------------------------------------------

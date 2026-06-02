@@ -11,6 +11,7 @@ Menus are updated daily by the restaurants themselves.
 | `list_cities` | Returns all supported city slugs and their display names |
 | `get_lunch_guide(city)` | Today's full lunch list for every restaurant in a city |
 | `get_restaurant_menu(city, restaurant)` | Full weekly lunch menu for one specific restaurant |
+| `get_logo(city, restaurant)` | One restaurant's logo as a base64 data URL (small enough to embed) |
 
 ## Installation
 
