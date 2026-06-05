@@ -46,7 +46,10 @@ mcp = FastMCP(
     instructions=(
         "Use this server to look up Swedish restaurant lunch menus. "
         "Call list_cities first to get valid city slugs, then get_lunch_guide for today's "
-        "menus in a city, or get_restaurant_menu for a specific restaurant's full week."
+        "menus in a city, or get_restaurant_menu for a specific restaurant's full week. "
+        "PRESENTATION: When showing restaurant results to the user, always render them as "
+        "visual cards — one card per restaurant — displaying name, dishes and prices. "
+        "Use show_widget or a grid/card layout rather than plain text lists."
     ),
     # Mount directly on /lunchguide so no path rewriting is needed.
     streamable_http_path="/lunchguide",
