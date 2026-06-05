@@ -329,7 +329,6 @@ def _parse_lunch_page(html: str) -> list[dict]:
             "slug": best_slug,
             "city": city_slug,
             "logo": slug_to_logo.get(best_slug, ""),
-            "url": f"{BASE_URL}{best_href}",
             "dishes": _parse_dishes(_preprocess_dish_lines(dish_lines, raw_name)),
         })
 
@@ -672,8 +671,6 @@ def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
             "slug": slug,
             "city": city_slug,
             "logo": logo_url,
-            "url": url,
-            "source": "mylunch.se",
             "dishes": dishes,
         })
 
@@ -824,8 +821,6 @@ def _parse_mylunch_restaurant_today(html: str, slug: str, city_slug: str) -> dic
         "slug": slug,
         "city": city_slug,
         "logo": logo_url,
-        "url": url,
-        "source": "mylunch.se",
         "dishes": dishes,
     }
 
@@ -885,14 +880,12 @@ def _fetch_mylunch(city: str) -> list[dict]:
 def _merge_sources(matochmat: list[dict], mylunch: list[dict]) -> list[dict]:
     """
     Merge two restaurant lists, deduplicating by name similarity.
-    Restaurants only in mylunch get source='mylunch.se'.
-    Restaurants in matochmat get source='matochmat.se'.
     """
     def _norm(name: str) -> str:
         return re.sub(r"[^a-z0-9]", "", name.lower())
 
     existing = {_norm(r["name"]) for r in matochmat}
-    merged = [{**r, "source": "matochmat.se"} for r in matochmat]
+    merged = list(matochmat)
 
     for r in mylunch:
         if _norm(r["name"]) not in existing:
@@ -1063,8 +1056,6 @@ def _fetch_byttan_today(city_slug: str) -> dict | None:
         "slug": BYTTAN_SLUG,
         "city": city_slug,
         "logo": "https://www.byttaniparken.se/assets/logo/byttan_emblem.svg",
-        "url": BYTTAN_URL,
-        "source": "byttaniparken.se",
         "dishes": dishes,
     }
 
@@ -1233,8 +1224,6 @@ def _fetch_gubben_today(city_slug: str) -> dict | None:
         "slug": GUBBEN_SLUG,
         "city": city_slug,
         "logo": GUBBEN_LOGO,
-        "url": GUBBEN_URL,
-        "source": "gubbenimatladan.se",
         "dishes": dishes,
     }
 
@@ -1328,7 +1317,6 @@ def list_cities() -> dict:
 def get_lunch_guide(city: str) -> str:
     """
     Get today's lunch menus for all restaurants in a Swedish city.
-    Fetches from multiple sources (matochmat.se + mylunch.se), merged and deduplicated.
 
     Args:
         city: City slug (e.g. "umea", "stockholm", "goteborg").
@@ -1340,9 +1328,7 @@ def get_lunch_guide(city: str) -> str:
           - name (str): Restaurant name
           - slug (str): Restaurant slug
           - city (str): City slug
-          - logo (str): Relative path to logo image
-          - url (str): Direct link to the restaurant's page
-          - source (str): "matochmat.se" or "mylunch.se"
+          - logo (str): Internal logo path — use get_logos() for base64 data URLs
           - dishes (list): Today's dishes, each with:
               - name (str): Dish name or description line
               - price (int|None): Price in SEK, null for description lines
@@ -1718,7 +1704,7 @@ def _run_price_check_background() -> None:
 #   GET /canvas.html              → site/canvas.html      (3-variant review)
 #   GET /design-canvas.jsx        → site/design-canvas.jsx
 #   GET /variants/<name>.html     → site/variants/<name>.html
-#   GET /image-proxy?path=/...    → proxies images from matochmat.se
+#   GET /image-proxy?path=/...    → proxies restaurant logo images
 #   *   /lunchguide(/*)           → rewritten to /mcp(/*)
 
 
