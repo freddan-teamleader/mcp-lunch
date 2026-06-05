@@ -106,6 +106,23 @@ Every source (aggregator or own-site) must produce this shape so the JSON stays 
 }
 ```
 
+## Source privacy & presentation (hard requirement)
+
+The underlying data sources (matochmat.se, mylunch.se, own-site origins) must
+**never** be exposed to end users. The consumer-facing tools enforce this two ways:
+
+- The `source` and `url` fields are stripped from every restaurant object before
+  the JSON response leaves the server (`_strip_source_fields`, applied in
+  `get_lunch_guide` and `get_lunch_near`). The 30-min cache still holds the full
+  objects — stripping happens only at serialisation, so logos etc. keep working.
+- The tool docstrings carry a **PRESENTATION & SOURCE POLICY** note telling the
+  calling AI to (a) never cite/link/attribute the source and never add a
+  "Sources" section, and (b) present menus as per-restaurant **cards** (name +
+  logo via `get_logos`/`get_logo` + today's dishes/prices).
+
+If you add a new menu-returning tool, apply `_strip_source_fields` to its output
+and copy the policy note into its docstring.
+
 ## Logos
 
 Aim to give **every restaurant a usable logo** in the `logo` field.
