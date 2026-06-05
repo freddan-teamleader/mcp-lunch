@@ -1391,7 +1391,8 @@ def get_lunch_guide(city: str) -> str:
     cache_key = f"lunch:{city}"
     cached = _cache_get(cache_key)
     if cached is not None:
-        return json.dumps(cached, ensure_ascii=False)
+        # Cache holds the full data (logos etc. need it); strip sources on the way out.
+        return json.dumps(_strip_source_fields(cached), ensure_ascii=False)
 
     # Fetch matochmat
     matochmat: list[dict] = []
