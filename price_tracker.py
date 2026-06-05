@@ -14,10 +14,9 @@ Environment variables:
     TRACK_CITIES  – comma-separated city slugs to track (default: kalmar,karlskrona)
 """
 
+import logging
 import os
 import sys
-import json
-import logging
 from datetime import date
 
 import psycopg2
@@ -80,13 +79,12 @@ def ensure_tables(conn):
 # Snapshot logic
 # ---------------------------------------------------------------------------
 
+
 def fetch_restaurants(city: str) -> list[dict]:
     """Fetch lunch data by calling matochmat.se directly (no MCP import needed)."""
-    import httpx
-    from bs4 import BeautifulSoup
-    # Add project root to path so we can reuse parsing helpers from server.py
     sys.path.insert(0, os.path.dirname(__file__))
     from server import _fetch, _parse_lunch_page
+
     try:
         html = _fetch(f"https://www.matochmat.se/lunch/{city}/")
         return _parse_lunch_page(html)
@@ -97,13 +95,16 @@ def fetch_restaurants(city: str) -> list[dict]:
 def get_previous_prices(conn, city: str) -> dict[tuple, int]:
     """Return {(city, restaurant, dish): price} for the most recent snapshot."""
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT DISTINCT ON (city, restaurant, dish)
                 city, restaurant, dish, price
             FROM lunch_prices
             WHERE city = %s
             ORDER BY city, restaurant, dish, snapshot_date DESC
-        """, (city,))
+        """,
+            (city,),
+        )
         return {(row[0], row[1], row[2]): row[3] for row in cur.fetchall()}
 
 
@@ -122,17 +123,20 @@ def save_snapshot(conn, city: str, restaurants: list[dict], today: date):
         return
 
     with conn.cursor() as cur:
-        execute_values(cur, """
+        execute_values(
+            cur,
+            """
             INSERT INTO lunch_prices (city, restaurant, dish, price, snapshot_date)
             VALUES %s
             ON CONFLICT (city, restaurant, dish, snapshot_date) DO NOTHING
-        """, rows)
+        """,
+            rows,
+        )
     conn.commit()
     log.info(f"Saved {len(rows)} dish prices for {city}")
 
 
-def detect_changes(conn, city: str, restaurants: list[dict],
-                   prev: dict[tuple, int], today: date):
+def detect_changes(conn, city: str, restaurants: list[dict], prev: dict[tuple, int], today: date):
     """Compare today's prices with previous snapshot, log and save changes."""
     changes = []
     for r in restaurants:
@@ -146,17 +150,20 @@ def detect_changes(conn, city: str, restaurants: list[dict],
             if old is not None and old != new:
                 diff = new - old
                 sign = "▲" if diff > 0 else "▼"
-                log.info(f"{sign} PRICE CHANGE: {name} / {dish['name']}: "
-                         f"{old} kr → {new} kr ({diff:+d} kr)")
+                log.info(f"{sign} PRICE CHANGE: {name} / {dish['name']}: {old} kr → {new} kr ({diff:+d} kr)")
                 changes.append((city, name, dish["name"], old, new, today))
 
     if changes:
         with conn.cursor() as cur:
-            execute_values(cur, """
+            execute_values(
+                cur,
+                """
                 INSERT INTO price_changes
                     (city, restaurant, dish, old_price, new_price, change_date)
                 VALUES %s
-            """, changes)
+            """,
+                changes,
+            )
         conn.commit()
         log.info(f"Recorded {len(changes)} price changes for {city}")
     else:
@@ -167,11 +174,13 @@ def detect_changes(conn, city: str, restaurants: list[dict],
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main():
     today = date.today()
     log.info(f"Price tracker starting — snapshot date: {today}")
 
-    from server import list_cities, _fetch, _parse_lunch_page
+    from server import list_cities
+
     cities = TRACK_CITIES or list(list_cities().keys())
     log.info(f"Tracking {len(cities)} cities: {', '.join(cities)}")
 

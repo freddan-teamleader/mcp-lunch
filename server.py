@@ -1,54 +1,39 @@
 """
-mcp-lunch  —  PATCHED to serve the teamleader.se landing page at /
----------------------------------------------------------------------
-Drop-in replacement for `freddan-teamleader/mcp-lunch/server.py`.
+mcp-lunch — MCP server that fetches Swedish restaurant lunch menus.
 
-Only diff vs. the upstream version:
-  • Adds `import mimetypes` and `from pathlib import Path`.
-  • Replaces the inline `_LANDING` placeholder in ImageProxyMiddleware
-    with a static-file handler that serves `site/index.html` at `/`,
-    plus `site/canvas.html`, `site/design-canvas.jsx`, and anything under
-    `site/variants/*.html`.
-  • Falls through to a small inline notice if the `site/` folder is
-    missing (so this file still works even before you copy the assets in).
+Single-file core (FastMCP). price_tracker.py is a separate batch job
+for historical price snapshots.
 
-Everything else — MCP tools, image proxy, `/lunchguide → /mcp` alias,
-SSE transport — is unchanged.
-
-Layout expected on disk:
-    mcp-lunch/
-      server.py          ← this file
-      requirements.txt
-      railway.toml
-      site/
-        index.html       ← Aurora landing
-        canvas.html      ← (optional) 3-variant review canvas
-        design-canvas.jsx← (optional) only needed if canvas.html is kept
-        variants/        ← (optional)
-          aurora.html
-          sunset.html
-          acid.html
-
-An MCP server that fetches today's lunch guides for Swedish cities.
-
-Tools exposed:
+MCP tools exposed:
   • list_cities          – list all available city slugs
   • get_lunch_guide      – today's full lunch list for a city
   • get_restaurant_menu  – full weekly lunch menu for one restaurant
+  • get_lunch_near       – today's menus near a point (Nominatim geocoding)
+  • get_logos            – base64 data-URL logos per restaurant slug (city)
+  • get_logo             – base64 data-URL logo for a single restaurant
+  • compare_city_prices  – avg/min/max prices from the price DB
 """
 
-import re
-import os
-import time
-import math
 import base64
-import json
-import mimetypes
 import datetime
-from pathlib import Path
+import hashlib
+import hmac
+import json
+import logging
+import math
+import mimetypes
+import os
+import re
+import subprocess
+import sys
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import httpx
+from pathlib import Path
 from urllib.parse import parse_qs
+
+import httpx
+from bs4 import BeautifulSoup
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
@@ -166,6 +151,42 @@ def _cache_set(key: str, val: object) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Shared slug / name helpers
+# ---------------------------------------------------------------------------
+
+_TRANSLITERATE = [
+    ("å", "a"),
+    ("ä", "a"),
+    ("ö", "o"),
+    ("é", "e"),
+    ("è", "e"),
+    ("ê", "e"),
+    ("ü", "u"),
+    ("ï", "i"),
+    ("ó", "o"),
+    ("ú", "u"),
+]
+
+
+def _to_slug(name: str) -> str:
+    """Lowercase name → URL-safe ASCII slug with hyphens."""
+    s = name.lower()
+    for fr, to in _TRANSLITERATE:
+        s = s.replace(fr, to)
+    return re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+
+
+def _norm_name(name: str) -> str:
+    """Collapse a restaurant name to lowercase alphanumeric for dedup comparisons."""
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+def _format_dish_lines(dishes: list[dict]) -> list[str]:
+    """Format a list of dish dicts as indented bullet lines."""
+    return [f"  • {d['name']}" + (f" ({d['price']} kr)" if d.get("price") else "") for d in dishes]
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -185,11 +206,18 @@ def _preprocess_dish_lines(lines: list[str], restaurant_name: str) -> list[str]:
     - Drop the restaurant name itself (appears as a text anchor after the logo)
     - Join split price tokens: "139" + "kr" → "139 kr"
     """
-    NAV = frozenset({
-        "veckansluncher", "veckans", "luncher",
-        "hitta hit", "hitta", "hit",
-        "visa alla lunchrätter", "visa fler",
-    })
+    NAV = frozenset(
+        {
+            "veckansluncher",
+            "veckans",
+            "luncher",
+            "hitta hit",
+            "hitta",
+            "hit",
+            "visa alla lunchrätter",
+            "visa fler",
+        }
+    )
     name_lower = restaurant_name.lower()
     result: list[str] = []
     i = 0
@@ -231,8 +259,6 @@ def _parse_lunch_page(html: str) -> list[dict]:
        "Name i City lunchmeny" section markers.
     3. Split the full page text into per-restaurant sections.
     """
-    from bs4 import BeautifulSoup
-
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
@@ -242,18 +268,18 @@ def _parse_lunch_page(html: str) -> list[dict]:
     slug_to_logo: dict[str, str] = {}
     for a in soup.find_all("a", href=re.compile(r"^/lunch/[^/]+/[^/]+/?$")):
         img = a.find("img")
-        href = a.get("href", "")
+        href = str(a.get("href") or "")
         parts = [p for p in href.strip("/").split("/") if p]
         if len(parts) != 3:
             continue
         slug = parts[2]
         if img:
-            alt = img.get("alt", "")
+            alt = str(img.get("alt") or "")
             if "veckansluncher" in alt.lower():
                 continue
             if slug not in slug_to_href:
                 slug_to_href[slug] = href
-                slug_to_logo[slug] = img.get("src", "")
+                slug_to_logo[slug] = str(img.get("src") or "")
         else:
             link_text = a.get_text(strip=True)
             if "veckansluncher" not in link_text.lower() and slug not in slug_to_href:
@@ -261,7 +287,7 @@ def _parse_lunch_page(html: str) -> list[dict]:
 
     # ── 2. Inline img alt text for get_text() section detection ─────────
     for img in soup.find_all("img"):
-        img.replace_with(img.get("alt", ""))
+        img.replace_with(str(img.get("alt") or ""))
 
     # Infer city slug from any collected href
     city_slug = ""
@@ -273,7 +299,7 @@ def _parse_lunch_page(html: str) -> list[dict]:
     LUNCHMENY_RE = re.compile(r"^(.+?)\s+i\s+\S.*?\s+lunchmeny\b", re.IGNORECASE)
     GLOBAL_SKIP = frozenset({"veckansluncher", "hitta hit", "visa alla lunchrätter"})
 
-    lines = [l.strip() for l in soup.get_text("\n").splitlines() if l.strip()]
+    lines = [ln.strip() for ln in soup.get_text("\n").splitlines() if ln.strip()]
     sections: list[tuple[str, list[str]]] = []
     cur_name: str | None = None
     cur_lines: list[str] = []
@@ -292,13 +318,6 @@ def _parse_lunch_page(html: str) -> list[dict]:
         sections.append((cur_name, cur_lines))
 
     # ── 4. Match sections to slugs and build result ──────────────────────
-    def _to_slug(name: str) -> str:
-        s = name.lower()
-        for fr, to in [("å","a"),("ä","a"),("ö","o"),("é","e"),("è","e"),
-                       ("ê","e"),("ü","u"),("ï","i"),("ó","o"),("ú","u")]:
-            s = s.replace(fr, to)
-        return re.sub(r"[^a-z0-9]+", "-", s).strip("-")
-
     seen: set[str] = set()
     restaurants: list[dict] = []
 
@@ -310,27 +329,27 @@ def _parse_lunch_page(html: str) -> list[dict]:
 
         guess = _to_slug(raw_name)
         best_slug: str | None = None
-        best_href: str | None = None
 
         if guess in slug_to_href:
-            best_slug, best_href = guess, slug_to_href[guess]
+            best_slug = guess
         else:
-            for slug, href in slug_to_href.items():
+            for slug in slug_to_href:
                 if guess[:8] == slug[:8]:
-                    best_slug, best_href = slug, href
+                    best_slug = slug
                     break
 
         if best_slug is None:
             best_slug = guess
-            best_href = f"/lunch/{city_slug}/{guess}/"
 
-        restaurants.append({
-            "name": raw_name,
-            "slug": best_slug,
-            "city": city_slug,
-            "logo": slug_to_logo.get(best_slug, ""),
-            "dishes": _parse_dishes(_preprocess_dish_lines(dish_lines, raw_name)),
-        })
+        restaurants.append(
+            {
+                "name": raw_name,
+                "slug": best_slug,
+                "city": city_slug,
+                "logo": slug_to_logo.get(best_slug, ""),
+                "dishes": _parse_dishes(_preprocess_dish_lines(dish_lines, raw_name)),
+            }
+        )
 
     return restaurants
 
@@ -349,9 +368,7 @@ def _parse_dishes(lines: list[str]) -> list[dict]:
     """
     price_re = re.compile(r"^(\d[\d\s]*)\s*kr$", re.IGNORECASE)
     # Labels that annotate the *previous* dish rather than starting a new one
-    tag_re = re.compile(
-        r"^(vegetarisk|laktosfri|glutenfri|vegan|vegansk)$", re.IGNORECASE
-    )
+    tag_re = re.compile(r"^(vegetarisk|laktosfri|glutenfri|vegan|vegansk)$", re.IGNORECASE)
     dishes = []
     current: dict | None = None
 
@@ -396,20 +413,18 @@ def _parse_dishes(lines: list[str]) -> list[dict]:
 
 def _simple_text_parse(html: str) -> str:
     """Return clean text from HTML, used for restaurant detail pages."""
-    from bs4 import BeautifulSoup
-
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
     text = soup.get_text(separator="\n")
-    lines = [l.strip() for l in text.splitlines()]
-    lines = [l for l in lines if l]
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
 # Slack notifier
 # ---------------------------------------------------------------------------
+
 
 def _notify_slack(message: str) -> None:
     """Post a message to Slack via webhook. Fails silently."""
@@ -418,7 +433,7 @@ def _notify_slack(message: str) -> None:
         return
     try:
         httpx.post(webhook, json={"text": message}, timeout=5)
-    except Exception:
+    except Exception:  # noqa: S110  # nosec B110 — webhook failures must never affect the server
         pass
 
 
@@ -444,10 +459,7 @@ def _clean_dishes_with_llm(dishes: list[dict], restaurant_name: str) -> list[dic
     if not api_key or _llm_quota_exceeded:
         return dishes
 
-    raw = "\n".join(
-        f"- {d['name']}" + (f" ({d['price']} kr)" if d.get("price") else "")
-        for d in dishes
-    )
+    raw = "\n".join(f"- {d['name']}" + (f" ({d['price']} kr)" if d.get("price") else "") for d in dishes)
 
     prompt = f"""You are extracting structured lunch menu data for the restaurant "{restaurant_name}".
 
@@ -491,7 +503,6 @@ Raw text:
                 f":warning: *mcp-lunch*: Anthropic API quota exceeded (HTTP {resp.status_code}). "
                 f"LLM dish cleaning disabled until next restart."
             )
-            import logging
             logging.getLogger(__name__).warning(msg)
             _notify_slack(msg)
             return dishes
@@ -510,17 +521,20 @@ Raw text:
         for item in cleaned:
             if not isinstance(item, dict) or not item.get("name"):
                 continue
-            result.append({
-                "name": str(item.get("name", "")),
-                "price": int(item["price"]) if item.get("price") else None,
-                "vegetarian": bool(item.get("vegetarian", False)),
-                "tags": list(item.get("tags", [])),
-                "closed": False,
-            })
+            result.append(
+                {
+                    "name": str(item.get("name", "")),
+                    "price": int(item["price"]) if item.get("price") else None,
+                    "vegetarian": bool(item.get("vegetarian", False)),
+                    "tags": list(item.get("tags", [])),
+                    "closed": False,
+                }
+            )
         return result if result else dishes
 
     except Exception:
         return dishes
+
 
 MYLUNCH_BASE = "https://www.mylunch.se"
 
@@ -577,20 +591,21 @@ def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
         p.mim-txt   = actual dish (has price in p.mim-prc sibling)
         p.mim-txt0  = header/separator line (skip)
     """
-    from bs4 import BeautifulSoup
-
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
 
     price_re = re.compile(r"(\d{2,4})\s*[Kk]r", re.IGNORECASE)
-    tag_re = re.compile(
-        r"\b(GF|LF|MF|vegetarisk|vegansk|vegan|glutenfri|laktosfri)\b", re.IGNORECASE
-    )
+    tag_re = re.compile(r"\b(GF|LF|MF|vegetarisk|vegansk|vegan|glutenfri|laktosfri)\b", re.IGNORECASE)
     tag_map = {
-        "gf": "glutenfri", "lf": "laktosfri", "mf": "mjölkfri",
-        "vegetarisk": "vegetarisk", "vegansk": "vegansk", "vegan": "vegansk",
-        "glutenfri": "glutenfri", "laktosfri": "laktosfri",
+        "gf": "glutenfri",
+        "lf": "laktosfri",
+        "mf": "mjölkfri",
+        "vegetarisk": "vegetarisk",
+        "vegansk": "vegansk",
+        "vegan": "vegansk",
+        "glutenfri": "glutenfri",
+        "laktosfri": "laktosfri",
     }
 
     restaurants = []
@@ -601,7 +616,6 @@ def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
         mih = mi.find("div", class_="mih")
         if not mih:
             continue
-        a = mih.find("a")
         h2 = mih.find("h2")
         if not h2:
             continue
@@ -610,16 +624,13 @@ def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
             continue
         seen_names.add(name.lower())
 
-        href = a.get("href", "") if a else ""
-        url = f"{MYLUNCH_BASE}{href}" if href.startswith("/") else href
-
         # Logo
         miib = mi.find("div", class_="miib")
         logo_url = ""
         if miib:
             img = miib.find("img")
             if img:
-                logo_url = img.get("src", "")
+                logo_url = str(img.get("src") or "")
 
         # Dishes from mim-row — only rows with p.mim-txt (not mim-txt0) are real dishes
         dishes = []
@@ -649,30 +660,30 @@ def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
                 if t in ("vegetarisk", "vegansk"):
                     is_veg = True
 
-            dishes.append({
-                "name": dish_name,
-                "price": price,
-                "vegetarian": is_veg,
-                "tags": tags,
-                "closed": False,
-            })
+            dishes.append(
+                {
+                    "name": dish_name,
+                    "price": price,
+                    "vegetarian": is_veg,
+                    "tags": tags,
+                    "closed": False,
+                }
+            )
 
         if not dishes:
             continue
 
-        # Build slug from name
-        slug = name.lower()
-        for fr, to in [("å","a"),("ä","a"),("ö","o"),("é","e"),(" ","-")]:
-            slug = slug.replace(fr, to)
-        slug = re.sub(r"[^a-z0-9-]+", "", slug).strip("-")
+        slug = _to_slug(name)
 
-        restaurants.append({
-            "name": name,
-            "slug": slug,
-            "city": city_slug,
-            "logo": logo_url,
-            "dishes": dishes,
-        })
+        restaurants.append(
+            {
+                "name": name,
+                "slug": slug,
+                "city": city_slug,
+                "logo": logo_url,
+                "dishes": dishes,
+            }
+        )
 
     return restaurants
 
@@ -681,6 +692,7 @@ _SITEMAP_CACHE: dict[str, tuple[float, list[str]]] = {}
 SITEMAP_TTL = 86400  # 24 h — restaurant list rarely changes
 
 _SV_DAYS = ["måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag"]
+_SV_WEEKDAYS = ("måndag", "tisdag", "onsdag", "torsdag", "fredag")
 
 
 def _today_sv() -> str:
@@ -694,9 +706,7 @@ def _get_mylunch_slugs(city: str) -> list[str]:
         return slugs
     try:
         xml = _fetch(f"{MYLUNCH_BASE}/sitemap-companies.xml")
-        slugs = re.findall(
-            rf"https://www\.mylunch\.se/{re.escape(city)}/([^/]+)/lunch/", xml
-        )
+        slugs = re.findall(rf"https://www\.mylunch\.se/{re.escape(city)}/([^/]+)/lunch/", xml)
     except Exception:
         slugs = []
     _SITEMAP_CACHE[city] = (time.time(), slugs)
@@ -708,8 +718,6 @@ def _parse_mylunch_restaurant_today(html: str, slug: str, city_slug: str) -> dic
     Parse an individual mylunch.se restaurant page for today's menu.
     Returns None if the restaurant has no menu today.
     """
-    from bs4 import BeautifulSoup
-
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
@@ -719,8 +727,6 @@ def _parse_mylunch_restaurant_today(html: str, slug: str, city_slug: str) -> dic
     name = h1.get_text(strip=True) if h1 else slug.replace("-", " ").title()
     # Strip " - Lunch" suffix that individual pages sometimes add
     name = re.sub(r"\s*[-–]\s*lunch\s*$", "", name, flags=re.IGNORECASE).strip()
-
-    url = f"{MYLUNCH_BASE}/{city_slug}/{slug}/lunch/"
 
     # Restaurant-level price (used when per-dish price is missing)
     rest_price: int | None = None
@@ -742,9 +748,7 @@ def _parse_mylunch_restaurant_today(html: str, slug: str, city_slug: str) -> dic
         re.I,
     )
     # Swedish day names — used to identify per-day sections
-    _DAY_RE = re.compile(
-        r"^(måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)\b", re.I
-    )
+    _DAY_RE = re.compile(r"^(måndag|tisdag|onsdag|torsdag|fredag|lördag|söndag)\b", re.I)
 
     def _rows_to_dishes(rows: list, default_price: int | None) -> list[dict]:
         dishes_out = []
@@ -764,13 +768,15 @@ def _parse_mylunch_restaurant_today(html: str, slug: str, city_slug: str) -> dic
             if price is None:
                 price = default_price
             is_veg = bool(re.search(r"\bvegetar|\bvegan", dish_name, re.I))
-            dishes_out.append({
-                "name": dish_name,
-                "price": price,
-                "vegetarian": is_veg,
-                "tags": ["vegetarisk"] if is_veg else [],
-                "closed": False,
-            })
+            dishes_out.append(
+                {
+                    "name": dish_name,
+                    "price": price,
+                    "vegetarian": is_veg,
+                    "tags": ["vegetarisk"] if is_veg else [],
+                    "closed": False,
+                }
+            )
         return dishes_out
 
     all_mims = soup.find_all("div", class_="mim")
@@ -867,8 +873,7 @@ def _fetch_mylunch(city: str) -> list[dict]:
         if os.environ.get("ANTHROPIC_API_KEY"):
             with ThreadPoolExecutor(max_workers=8) as pool:
                 futures = {
-                    pool.submit(_clean_dishes_with_llm, r["dishes"], r["name"]): i
-                    for i, r in enumerate(restaurants)
+                    pool.submit(_clean_dishes_with_llm, r["dishes"], r["name"]): i for i, r in enumerate(restaurants)
                 }
                 for fut, idx in futures.items():
                     restaurants[idx]["dishes"] = fut.result()
@@ -878,19 +883,12 @@ def _fetch_mylunch(city: str) -> list[dict]:
 
 
 def _merge_sources(matochmat: list[dict], mylunch: list[dict]) -> list[dict]:
-    """
-    Merge two restaurant lists, deduplicating by name similarity.
-    """
-    def _norm(name: str) -> str:
-        return re.sub(r"[^a-z0-9]", "", name.lower())
-
-    existing = {_norm(r["name"]) for r in matochmat}
+    """Merge two restaurant lists, deduplicating by name similarity."""
+    existing = {_norm_name(r["name"]) for r in matochmat}
     merged = list(matochmat)
-
     for r in mylunch:
-        if _norm(r["name"]) not in existing:
+        if _norm_name(r["name"]) not in existing:
             merged.append(r)
-
     return merged
 
 
@@ -913,7 +911,6 @@ def _merge_sources(matochmat: list[dict], mylunch: list[dict]) -> list[dict]:
 
 BYTTAN_URL = "https://www.byttaniparken.se/meny"
 BYTTAN_SLUG = "byttan-i-parken"
-_BYTTAN_WEEKDAYS = ("måndag", "tisdag", "onsdag", "torsdag", "fredag")
 
 
 def _parse_byttan_weekly(html: str) -> dict:
@@ -930,12 +927,10 @@ def _parse_byttan_weekly(html: str) -> dict:
     weekday names, "Helglunch") and the next top-level section ("Bistro"),
     rather than fragile CSS classes.
     """
-    from bs4 import BeautifulSoup
-
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
-    lines = [l.strip() for l in soup.get_text("\n").splitlines() if l.strip()]
+    lines = [ln.strip() for ln in soup.get_text("\n").splitlines() if ln.strip()]
 
     PRICE_WEEKDAY = 149
     PRICE_WEEKEND = 299
@@ -957,14 +952,14 @@ def _parse_byttan_weekly(html: str) -> dict:
 
     def _slice(after: str, until: set[str]) -> list[str]:
         try:
-            i0 = next(i for i, l in enumerate(lines) if l.lower() == after)
+            i0 = next(i for i, ln in enumerate(lines) if ln.lower() == after)
         except StopIteration:
             return []
         out: list[str] = []
-        for l in lines[i0 + 1:]:
-            if l.lower() in until:
+        for line in lines[i0 + 1 :]:
+            if line.lower() in until:
                 break
-            out.append(l)
+            out.append(line)
         return out
 
     days: dict[str, list[dict]] = {}
@@ -972,56 +967,75 @@ def _parse_byttan_weekly(html: str) -> dict:
     # ── Weekday lunch: between "Veckans lunch" and "Helglunch" ──────────
     cur_day: str | None = None
     veg_next = False
-    for l in _slice("veckans lunch", {"helglunch", "bistro"}):
-        low = l.lower()
-        if low in _BYTTAN_WEEKDAYS:
+    for line in _slice("veckans lunch", {"helglunch", "bistro"}):
+        low = line.lower()
+        if low in _SV_WEEKDAYS:
             cur_day = low
             days.setdefault(cur_day, [])
             veg_next = False
-        elif cur_day is None or _is_noise(l):
+        elif cur_day is None or _is_noise(line):
             continue
         elif low == "vegetariskt":
             veg_next = True
         elif low == "byttan abonnerad":
-            days[cur_day].append({
-                "name": "Byttan abonnerad (lunchstängt)",
-                "price": None, "vegetarian": False, "tags": [], "closed": True,
-            })
-        elif _is_desc(l) and days[cur_day]:
+            days[cur_day].append(
+                {
+                    "name": "Byttan abonnerad (lunchstängt)",
+                    "price": None,
+                    "vegetarian": False,
+                    "tags": [],
+                    "closed": True,
+                }
+            )
+        elif _is_desc(line) and days[cur_day]:
             prev = days[cur_day][-1]
-            prev["name"] = f'{prev["name"]} – {l.rstrip(".")}'
+            prev["name"] = f"{prev['name']} – {line.rstrip('.')}"
         else:
-            days[cur_day].append({
-                "name": l, "price": PRICE_WEEKDAY, "vegetarian": veg_next,
-                "tags": ["vegetarisk"] if veg_next else [], "closed": False,
-            })
+            days[cur_day].append(
+                {
+                    "name": line,
+                    "price": PRICE_WEEKDAY,
+                    "vegetarian": veg_next,
+                    "tags": ["vegetarisk"] if veg_next else [],
+                    "closed": False,
+                }
+            )
             veg_next = False
 
     # ── Weekend set menu: between "Helglunch" and "Bistro"/"Sällskap" ───
     helg: list[dict] = []
-    for l in _slice("helglunch", {"bistro", "sällskap"}):
-        low = l.lower()
-        if (_is_noise(l) or "inkl." in low
-                or low.startswith("lördag") or low.startswith("helglunch")):
+    for line in _slice("helglunch", {"bistro", "sällskap"}):
+        low = line.lower()
+        if _is_noise(line) or "inkl." in low or low.startswith("lördag") or low.startswith("helglunch"):
             continue
-        if _is_desc(l) and helg:
-            helg[-1]["name"] = f'{helg[-1]["name"]} – {l.rstrip(".")}'
+        if _is_desc(line) and helg:
+            helg[-1]["name"] = f"{helg[-1]['name']} – {line.rstrip('.')}"
         else:
-            helg.append({
-                "name": l, "price": PRICE_WEEKEND, "vegetarian": False,
-                "tags": [], "closed": False,
-            })
+            helg.append(
+                {
+                    "name": line,
+                    "price": PRICE_WEEKEND,
+                    "vegetarian": False,
+                    "tags": [],
+                    "closed": False,
+                }
+            )
     if helg:
         days["helg"] = helg
 
     # ── Always-available items (weekly soup) ────────────────────────────
     standing: list[dict] = []
-    for l in lines:
-        if l.lower().startswith("veckans soppa"):
-            standing.append({
-                "name": "Veckans soppa med bröd och sallad",
-                "price": 130, "vegetarian": False, "tags": [], "closed": False,
-            })
+    for line in lines:
+        if line.lower().startswith("veckans soppa"):
+            standing.append(
+                {
+                    "name": "Veckans soppa med bröd och sallad",
+                    "price": 130,
+                    "vegetarian": False,
+                    "tags": [],
+                    "closed": False,
+                }
+            )
             break
 
     return {"days": days, "standing": standing}
@@ -1041,10 +1055,15 @@ def _fetch_byttan_today(city_slug: str) -> dict | None:
         dishes = list(weekly["days"].get("helg", []))
     elif today == "måndag":
         # Lunch is served tis–fre only; café is still open.
-        dishes = [{
-            "name": "Lunch serveras tis–fre 11.30–14.30 (caféet öppet som vanligt)",
-            "price": None, "vegetarian": False, "tags": [], "closed": False,
-        }] + list(weekly["standing"])
+        dishes = [
+            {
+                "name": "Lunch serveras tis–fre 11.30–14.30 (caféet öppet som vanligt)",
+                "price": None,
+                "vegetarian": False,
+                "tags": [],
+                "closed": False,
+            }
+        ] + list(weekly["standing"])
     else:
         dishes = list(weekly["days"].get(today, [])) + list(weekly["standing"])
 
@@ -1069,8 +1088,11 @@ def _byttan_weekly_text() -> str:
 
     w = _parse_byttan_weekly(html)
     order = [
-        ("Tisdag", "tisdag"), ("Onsdag", "onsdag"), ("Torsdag", "torsdag"),
-        ("Fredag", "fredag"), ("Lördag & söndag (Helglunch)", "helg"),
+        ("Tisdag", "tisdag"),
+        ("Onsdag", "onsdag"),
+        ("Torsdag", "torsdag"),
+        ("Fredag", "fredag"),
+        ("Lördag & söndag (Helglunch)", "helg"),
     ]
     out = [
         "Byttan i Parken – Veckans lunch",
@@ -1082,16 +1104,13 @@ def _byttan_weekly_text() -> str:
         out.append(label)
         items = w["days"].get(key, [])
         if items:
-            for d in items:
-                price = f' ({d["price"]} kr)' if d.get("price") else ""
-                out.append(f'  • {d["name"]}{price}')
+            out.extend(_format_dish_lines(items))
         else:
             out.append("  • (ingen lunchinfo för dagen)")
         out.append("")
     if w["standing"]:
         out.append("Alltid:")
-        for d in w["standing"]:
-            out.append(f'  • {d["name"]} ({d["price"]} kr)')
+        out.extend(_format_dish_lines(w["standing"]))
     return "\n".join(out)
 
 
@@ -1099,7 +1118,6 @@ def _byttan_weekly_text() -> str:
 GUBBEN_URL = "https://gubbenimatladan.se/"
 GUBBEN_SLUG = "gubben-i-matladan"
 GUBBEN_LOGO = "https://gubbenimatladan.se/wp-content/uploads/2024/03/cropped-Fav_gubbenimatladan_512px-270x270.png"
-_GUBBEN_WEEKDAYS = ("måndag", "tisdag", "onsdag", "torsdag", "fredag")
 _GUBBEN_DAGENS_PRICE = 139  # eat-in; take-away is cheaper but we report eat-in
 
 
@@ -1111,19 +1129,16 @@ def _parse_gubben_weekly(html: str) -> dict:
     The page lists "DAGENS RÄTT V<n>" with MÅNDAG..FREDAG, then VECKANS PASTA
     and VECKANS FISK (available all week → standing). Text-anchor based.
     """
-    from bs4 import BeautifulSoup
-
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
-    lines = [l.strip() for l in soup.get_text("\n").splitlines() if l.strip()]
+    lines = [ln.strip() for ln in soup.get_text("\n").splitlines() if ln.strip()]
 
-    END = {"meny", "restaurangen", "välkommen!", "välkommen",
-           "händer hos gubben", "foodtruck", "catering"}
+    END = {"meny", "restaurangen", "välkommen!", "välkommen", "händer hos gubben", "foodtruck", "catering"}
 
     # Start at the weekly "DAGENS RÄTT V<n>" heading (not the "Dagens lunch" nav).
     start = next(
-        (i for i, l in enumerate(lines) if l.lower().startswith("dagens rätt")),
+        (i for i, ln in enumerate(lines) if ln.lower().startswith("dagens rätt")),
         None,
     )
     if start is None:
@@ -1140,11 +1155,11 @@ def _parse_gubben_weekly(html: str) -> dict:
         m = re.search(r"(\d+)\s*kr", s.lower())
         return int(m.group(1)) if m else None
 
-    for l in lines[start + 1:]:
-        low = l.lower()
+    for line in lines[start + 1 :]:
+        low = line.lower()
         if low in END:
             break
-        if low in _GUBBEN_WEEKDAYS:
+        if low in _SV_WEEKDAYS:
             mode = f"day:{low}"
             days_raw.setdefault(low, [])
             continue
@@ -1155,7 +1170,7 @@ def _parse_gubben_weekly(html: str) -> dict:
             mode = "fisk"
             continue
         if low.startswith("äta här") or low.startswith("take away"):
-            price = _first_kr(l)  # first number = eat-in price
+            price = _first_kr(line)  # first number = eat-in price
             if mode == "pasta":
                 pasta_price = price
             elif mode == "fisk":
@@ -1163,11 +1178,11 @@ def _parse_gubben_weekly(html: str) -> dict:
             continue
         # content line (dish name or description)
         if mode and mode.startswith("day:"):
-            days_raw[mode[4:]].append(l)
+            days_raw[mode[4:]].append(line)
         elif mode == "pasta":
-            pasta_raw.append(l)
+            pasta_raw.append(line)
         elif mode == "fisk":
-            fisk_raw.append(l)
+            fisk_raw.append(line)
 
     def _compose(seg: list[str], price: int | None, label: str = "") -> dict | None:
         if not seg:
@@ -1177,8 +1192,13 @@ def _parse_gubben_weekly(html: str) -> dict:
             desc = " ".join(s.rstrip(".") for s in seg[1:])
             name = f"{name} – {desc}"
         veg = bool(re.search(r"vegetar|vegan", name, re.I))
-        return {"name": name.rstrip(" ."), "price": price, "vegetarian": veg,
-                "tags": ["vegetarisk"] if veg else [], "closed": False}
+        return {
+            "name": name.rstrip(" ."),
+            "price": price,
+            "vegetarian": veg,
+            "tags": ["vegetarisk"] if veg else [],
+            "closed": False,
+        }
 
     days: dict[str, list[dict]] = {}
     for d, seg in days_raw.items():
@@ -1207,9 +1227,9 @@ def _fetch_gubben_today(city_slug: str) -> dict | None:
     weekly = _parse_gubben_weekly(html)
     today = _today_sv()
 
+    dishes: list[dict]
     if today == "söndag":
-        dishes = [{"name": "Söndagsstängt", "price": None, "vegetarian": False,
-                   "tags": [], "closed": True}]
+        dishes = [{"name": "Söndagsstängt", "price": None, "vegetarian": False, "tags": [], "closed": True}]
     elif today == "lördag":
         # Open Sat but no weekday "dagens" — show the week's pasta/fish.
         dishes = list(weekly["standing"])
@@ -1236,8 +1256,13 @@ def _gubben_weekly_text() -> str:
         return f"Error: Could not fetch Gubben i Matlådan menu: {e}"
 
     w = _parse_gubben_weekly(html)
-    order = [("Måndag", "måndag"), ("Tisdag", "tisdag"), ("Onsdag", "onsdag"),
-             ("Torsdag", "torsdag"), ("Fredag", "fredag")]
+    order = [
+        ("Måndag", "måndag"),
+        ("Tisdag", "tisdag"),
+        ("Onsdag", "onsdag"),
+        ("Torsdag", "torsdag"),
+        ("Fredag", "fredag"),
+    ]
     out = [
         "Gubben i Matlådan – Veckans lunch",
         "Ölands Köpstad / brofästet, Färjestaden",
@@ -1248,17 +1273,13 @@ def _gubben_weekly_text() -> str:
         out.append(label)
         items = w["days"].get(key, [])
         if items:
-            for d in items:
-                price = f' ({d["price"]} kr)' if d.get("price") else ""
-                out.append(f'  • {d["name"]}{price}')
+            out.extend(_format_dish_lines(items))
         else:
             out.append("  • (ingen lunchinfo för dagen)")
         out.append("")
     if w["standing"]:
         out.append("Hela veckan:")
-        for d in w["standing"]:
-            price = f' ({d["price"]} kr)' if d.get("price") else ""
-            out.append(f'  • {d["name"]}{price}')
+        out.extend(_format_dish_lines(w["standing"]))
     return "\n".join(out)
 
 
@@ -1348,7 +1369,7 @@ def get_lunch_guide(city: str) -> str:
     try:
         html = _fetch(f"{BASE_URL}/lunch/{city}/")
         matochmat = _parse_lunch_page(html)
-    except Exception:
+    except Exception:  # noqa: S110  # nosec B110 — matochmat down must not suppress mylunch results
         pass
 
     # Fetch mylunch
@@ -1359,11 +1380,9 @@ def get_lunch_guide(city: str) -> str:
     # Own-site restaurants not present on the aggregators
     custom = _fetch_custom_sources(city)
     if custom:
-        def _norm(name: str) -> str:
-            return re.sub(r"[^a-z0-9]", "", name.lower())
-        existing = {_norm(r["name"]) for r in merged}
+        existing = {_norm_name(r["name"]) for r in merged}
         for r in custom:
-            if _norm(r["name"]) not in existing:
+            if _norm_name(r["name"]) not in existing:
                 merged.append(r)
 
     if not merged:
@@ -1465,8 +1484,7 @@ def get_logo(city: str, restaurant: str) -> str:
     target = next((r for r in restaurants if r.get("slug") == restaurant), None)
     if target is None:
         return json.dumps(
-            {"slug": restaurant, "logo": None,
-             "error": f"Restaurant '{restaurant}' not found in '{city}'."},
+            {"slug": restaurant, "logo": None, "error": f"Restaurant '{restaurant}' not found in '{city}'."},
             ensure_ascii=False,
         )
 
@@ -1582,17 +1600,18 @@ def compare_city_prices(month: str | None = None) -> str:
           - dish_count (int): Number of priced dishes in the snapshot(s)
           - snapshots (int): Number of monthly snapshots included
     """
-    import os
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
         return json.dumps({"error": "DATABASE_URL not set — price tracker has not been configured."})
 
     try:
         import psycopg2
+
         conn = psycopg2.connect(database_url)
         with conn.cursor() as cur:
             if month:
-                cur.execute("""
+                cur.execute(
+                    """
                     SELECT
                         city,
                         ROUND(AVG(price)::numeric, 1)  AS avg_price,
@@ -1604,7 +1623,9 @@ def compare_city_prices(month: str | None = None) -> str:
                     WHERE to_char(snapshot_date, 'YYYY-MM') = %s
                     GROUP BY city
                     ORDER BY avg_price ASC
-                """, (month,))
+                """,
+                    (month,),
+                )
             else:
                 cur.execute("""
                     SELECT
@@ -1679,21 +1700,21 @@ def get_restaurant_menu(city: str, restaurant: str) -> str:
 # Slack-triggered price check
 # ---------------------------------------------------------------------------
 
+
 def _run_price_check_background() -> None:
     """Run price_tracker.py in a subprocess and notify Slack when done."""
-    import subprocess
-    import sys
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603  # nosec B603 — no user input; path is hardcoded relative to this file
             [sys.executable, str(Path(__file__).parent / "price_tracker.py")],
-            capture_output=True, text=True, timeout=600,
+            capture_output=True,
+            text=True,
+            timeout=600,
         )
         if result.returncode == 0:
             _notify_slack(":white_check_mark: *mcp-lunch*: Priskoll klar! Databasen är uppdaterad.")
         else:
             _notify_slack(
-                f":x: *mcp-lunch*: Priskoll misslyckades (exit {result.returncode}).\n"
-                f"```{result.stderr[-500:]}```"
+                f":x: *mcp-lunch*: Priskoll misslyckades (exit {result.returncode}).\n```{result.stderr[-500:]}```"
             )
     except Exception as e:
         _notify_slack(f":x: *mcp-lunch*: Priskoll kraschade: {e}")
@@ -1724,7 +1745,7 @@ class ImageProxyMiddleware:
 
     # Tiny fallback page if site/ has not been copied in yet
     _FALLBACK = (
-        "<!doctype html><meta charset=\"utf-8\"><title>teamleader.se</title>"
+        '<!doctype html><meta charset="utf-8"><title>teamleader.se</title>'
         "<style>body{font-family:system-ui;max-width:560px;margin:6rem auto;"
         "padding:0 1.5rem;color:#222;line-height:1.6}code{background:#f4f4f4;"
         "padding:2px 6px;border-radius:4px;font-size:.9em}</style>"
@@ -1732,7 +1753,7 @@ class ImageProxyMiddleware:
         "<p>MCP server live at <code>/lunchguide</code>. "
         "Landing page assets not deployed yet — drop <code>site/index.html</code> "
         "into the repo and redeploy.</p>"
-    ).encode("utf-8")
+    ).encode()
 
     def __init__(self, app):
         self.app = app
@@ -1797,46 +1818,44 @@ class ImageProxyMiddleware:
             if static_file is not None:
                 if static_file.is_file():
                     body = static_file.read_bytes()
-                    cache = (
-                        b"no-cache"
-                        if static_file.suffix == ".html"
-                        else b"public, max-age=3600"
+                    cache = b"no-cache" if static_file.suffix == ".html" else b"public, max-age=3600"
+                    await send(
+                        {
+                            "type": "http.response.start",
+                            "status": 200,
+                            "headers": [
+                                [b"content-type", self._content_type(static_file)],
+                                [b"content-length", str(len(body)).encode()],
+                                [b"cache-control", cache],
+                                [b"x-content-type-options", b"nosniff"],
+                                [b"referrer-policy", b"strict-origin-when-cross-origin"],
+                            ],
+                        }
                     )
-                    await send({
-                        "type": "http.response.start",
-                        "status": 200,
-                        "headers": [
-                            [b"content-type", self._content_type(static_file)],
-                            [b"content-length", str(len(body)).encode()],
-                            [b"cache-control", cache],
-                            [b"x-content-type-options", b"nosniff"],
-                            [b"referrer-policy", b"strict-origin-when-cross-origin"],
-                        ],
-                    })
-                    await send({
-                        "type": "http.response.body",
-                        "body": b"" if method == "HEAD" else body,
-                    })
+                    await send(
+                        {
+                            "type": "http.response.body",
+                            "body": b"" if method == "HEAD" else body,
+                        }
+                    )
                     return
                 # Route is known but file is missing → fall back gracefully on `/`
                 if req_path in ("/", "/index.html"):
-                    await send({
-                        "type": "http.response.start",
-                        "status": 200,
-                        "headers": [
-                            [b"content-type", b"text/html; charset=utf-8"],
-                            [b"content-length", str(len(self._FALLBACK)).encode()],
-                        ],
-                    })
+                    await send(
+                        {
+                            "type": "http.response.start",
+                            "status": 200,
+                            "headers": [
+                                [b"content-type", b"text/html; charset=utf-8"],
+                                [b"content-length", str(len(self._FALLBACK)).encode()],
+                            ],
+                        }
+                    )
                     await send({"type": "http.response.body", "body": self._FALLBACK})
                     return
 
         # ── Slack-triggered price check ──────────────────────────────────────
         if req_path == "/lunchguide/run-price-check" and scope["method"] == "POST":
-            import threading
-            import hashlib
-            import hmac
-            from urllib.parse import parse_qs as _parse_qs
             body_parts = []
             async for chunk in self._iter_body(receive):
                 body_parts.append(chunk)
@@ -1851,15 +1870,21 @@ class ImageProxyMiddleware:
                 sig_basestring = f"v0:{timestamp}:{raw_body.decode()}".encode()
                 expected = "v0=" + hmac.new(signing_secret, sig_basestring, hashlib.sha256).hexdigest()
                 if not hmac.compare_digest(expected, slack_sig):
-                    await send({"type": "http.response.start", "status": 401,
-                                "headers": [[b"content-type", b"text/plain"]]})
+                    await send(
+                        {"type": "http.response.start", "status": 401, "headers": [[b"content-type", b"text/plain"]]}
+                    )
                     await send({"type": "http.response.body", "body": b"Unauthorized"})
                     return
 
             # Respond immediately to Slack (must reply within 3 s)
             ack = ":hourglass: Startar priskoll\u2026".encode("utf-8")
-            await send({"type": "http.response.start", "status": 200,
-                        "headers": [[b"content-type", b"text/plain; charset=utf-8"]]})
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [[b"content-type", b"text/plain; charset=utf-8"]],
+                }
+            )
             await send({"type": "http.response.body", "body": ack})
             # Run price_tracker.py in a background thread
             threading.Thread(target=_run_price_check_background, daemon=True).start()
@@ -1872,40 +1897,44 @@ class ImageProxyMiddleware:
 
             if img_path and img_path.startswith("/assets/"):
                 try:
-                    async with httpx.AsyncClient(
-                        follow_redirects=True, timeout=10
-                    ) as client:
+                    async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
                         resp = await client.get(f"{BASE_URL}{img_path}", headers=HEADERS)
                         resp.raise_for_status()
                     ct = resp.headers.get("content-type", "image/jpeg").encode()
                     body = resp.content
-                    await send({
-                        "type": "http.response.start",
-                        "status": 200,
-                        "headers": [
-                            [b"content-type", ct],
-                            [b"content-length", str(len(body)).encode()],
-                            [b"cache-control", b"public, max-age=3600"],
-                            [b"access-control-allow-origin", b"*"],
-                        ],
-                    })
+                    await send(
+                        {
+                            "type": "http.response.start",
+                            "status": 200,
+                            "headers": [
+                                [b"content-type", ct],
+                                [b"content-length", str(len(body)).encode()],
+                                [b"cache-control", b"public, max-age=3600"],
+                                [b"access-control-allow-origin", b"*"],
+                            ],
+                        }
+                    )
                     await send({"type": "http.response.body", "body": body})
                     return
                 except Exception as exc:
                     msg = f"Proxy error: {exc}".encode()
-                    await send({
-                        "type": "http.response.start",
-                        "status": 502,
-                        "headers": [[b"content-type", b"text/plain"]],
-                    })
+                    await send(
+                        {
+                            "type": "http.response.start",
+                            "status": 502,
+                            "headers": [[b"content-type", b"text/plain"]],
+                        }
+                    )
                     await send({"type": "http.response.body", "body": msg})
                     return
 
-            await send({
-                "type": "http.response.start",
-                "status": 400,
-                "headers": [[b"content-type", b"text/plain"]],
-            })
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 400,
+                    "headers": [[b"content-type", b"text/plain"]],
+                }
+            )
             await send({"type": "http.response.body", "body": b"Bad request"})
             return
 
@@ -1927,7 +1956,8 @@ if __name__ == "__main__":
     else:
         # HTTP server — default, used on Railway and any other hosted environment
         import uvicorn
+
         port = int(os.environ.get("PORT", "8000"))
         mcp_app = mcp.streamable_http_app()
         app = ImageProxyMiddleware(mcp_app)
-        uvicorn.run(app, host="0.0.0.0", port=port)
+        uvicorn.run(app, host="0.0.0.0", port=port)  # noqa: S104  # nosec B104 — Railway requires binding all interfaces
