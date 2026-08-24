@@ -1767,6 +1767,8 @@ class ImageProxyMiddleware:
         "/canvas.html": "canvas.html",
         "/design-canvas.jsx": "design-canvas.jsx",
         "/favicon.ico": "favicon.ico",  # served if you add one, ignored otherwise
+        "/lunchguide.html": "lunchguide.html",
+        "/lunchguide": "lunchguide.html",  # GET /lunchguide → web UI
     }
 
     # Tiny fallback page if site/ has not been copied in yet

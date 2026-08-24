@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<title>Lunchguide -- teamleader.se</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#07070d;--ink:#ecedf3;--ink-dim:#8a8da1;--line:rgba(236,237,243,0.08);--teal:#2bd4d9;--indigo:#6366f1;--card-bg:rgba(255,255,255,0.03);--card-border:rgba(255,255,255,0.07)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+body{background:radial-gradient(ellipse 80% 60% at 15% 5%,rgba(43,212,217,.12),transparent 60%),radial-gradient(ellipse 70% 50% at 85% 20%,rgba(233,75,175,.14),transparent 60%),radial-gradient(ellipse 60% 50% at 60% 80%,rgba(99,102,241,.12),transparent 60%),var(--bg)}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);background-size:56px 56px;mask-image:radial-gradient(ellipse at 50% 30%,black 30%,transparent 80%)}
+nav.top{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:24px 48px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;text-decoration:none;color:var(--ink)}
+.brand-mark{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,var(--teal),var(--indigo));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff}
+.nav-links{display:flex;gap:32px;align-items:center}
+.nav-links a{color:var(--ink-dim);text-decoration:none;font-size:14px;transition:color .2s}
+.nav-links a:hover{color:var(--ink)}
+.nav-links a.active{color:var(--teal)}
+main{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:48px 24px 80px}
+.page-header{margin-bottom:40px}
+.page-header h1{font-size:32px;font-weight:700;letter-spacing:-.02em}
+.page-header h1 span{color:var(--teal)}
+.page-header p{color:var(--ink-dim);font-size:15px;margin-top:8px}
+.controls{display:flex;align-items:center;gap:12px;margin-bottom:36px;flex-wrap:wrap}
+</style>
+.city-select{background:var(--card-bg);border:1px solid var(--card-border);color:var(--ink);font-family:'Space Grotesk',sans-serif;font-size:14px;padding:10px 16px;border-radius:8px;cursor:pointer;outline:none;min-width:200px;transition:border-color .2s}
+.city-select:hover,.city-select:focus{border-color:rgba(43,212,217,.4)}
+.city-select option{background:#1a1a2e}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:1px solid var(--card-border);background:var(--card-bg);color:var(--ink);font-family:'Space Grotesk',sans-serif;transition:all .2s}
+.btn:hover{border-color:rgba(43,212,217,.4);background:rgba(43,212,217,.06)}
+.btn svg{width:16px;height:16px}
+.location-badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--teal);font-family:'JetBrains Mono',monospace;background:rgba(43,212,217,.08);border:1px solid rgba(43,212,217,.2);padding:6px 12px;border-radius:20px}
+.status{text-align:center;padding:60px 24px;color:var(--ink-dim);font-size:15px}
+.spinner{width:32px;height:32px;border:2px solid var(--card-border);border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;padding:20px;transition:border-color .2s,background .2s}
+.card:hover{border-color:rgba(43,212,217,.2);background:rgba(43,212,217,.03)}
+.card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.card-logo{width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0}
+.card-logo-ph{width:40px;height:40px;border-radius:8px;background:rgba(99,102,241,.2);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;flex-shrink:0;color:var(--indigo)}
+.card-name{font-size:15px;font-weight:600;line-height:1.3}
+.card-source{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--ink-dim);margin-top:3px}
+.badge-veg{display:inline-block;font-size:10px;font-family:'JetBrains Mono',monospace;padding:2px 6px;border-radius:4px;font-weight:600;background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.2)}
+.dishes{list-style:none;display:flex;flex-direction:column}
+.dish{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:14px;padding:8px 0;border-bottom:1px solid var(--line)}
+.dish:last-child{border-bottom:none}
+.dish-name{color:var(--ink);flex:1;line-height:1.4}
+.dish-price{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--teal);white-space:nowrap}
+.dish-closed{color:var(--ink-dim);font-style:italic;font-size:13px}
+.date-label{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-dim);margin-bottom:24px}
+.count-label{font-size:14px;color:var(--ink-dim);margin-bottom:24px}
+.count-label strong{color:var(--ink)}
+footer{position:relative;z-index:1;text-align:center;padding:32px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-dim);font-family:'JetBrains Mono',monospace}
+footer a{color:var(--teal);text-decoration:none}
+</style>
+</head>
+<body>
+<nav class="top">
+  <a href="/" class="brand"><div class="brand-mark">tl</div>teamleader.se</a>
+  <div class="nav-links"><a href="/">Hem</a><a href="/lunchguide" class="active">Lunchguide</a></div>
+</nav>
+<main>
+  <div class="page-header">
+    <h1>Dagens <span>lunchguide</span></h1>
+    <p>Aktuella lunchmenyer hamtade via mcp-lunch.</p>
+  </div>
+  <div class="controls">
+    <select class="city-select" id="citySelect"><option value="">Valjer stad...</option></select>
+    <button class="btn" id="geoBtn" onclick="useGeolocation()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>
+      Hitta min plats
+    </button>
+    <div id="locationBadge" style="display:none" class="location-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+      <span id="locationText"></span>
+    </div>
+  </div>
+  <div id="dateLabel" class="date-label"></div>
+  <div id="countLabel" class="count-label" style="display:none"></div>
+  <div id="status" class="status"><p>Valj en stad eller klicka pa Hitta min plats.</p></div>
+  <div id="grid" class="grid" style="display:none"></div>
+</main>
+<footer>Drivs av <a href="/lunchguide">mcp-lunch</a> &middot; <a href="/">teamleader.se</a></footer>
+<script>
+var MCP='/lunchguide',mid=1,sid=null;
+function mcpCall(method,params){
+  var h={'Content-Type':'application/json','Accept':'application/json, text/event-stream'};
+  if(sid)h['Mcp-Session-Id']=sid;
+  return fetch(MCP,{method:'POST',headers:h,body:JSON.stringify({jsonrpc:'2.0',id:mid++,method:method,params:params})}).then(function(r){
+    var s=r.headers.get('Mcp-Session-Id');if(s)sid=s;
+    var ct=r.headers.get('content-type')||'';
+    if(ct.indexOf('text/event-stream')>=0){
+      return r.text().then(function(t){
+        var lines=t.split('\n').filter(function(l){return l.indexOf('data:')==0;});
+        for(var i=0;i<lines.length;i++){try{var d=JSON.parse(lines[i].slice(5));if(d.result)return d.result;}catch(e){}}
+        return null;
+      });
+    }
+    return r.json().then(function(d){return d.result;});
+  });
+}
+function init(){
+  mcpCall('initialize',{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'lunchguide-web',version:'1.0'}})
+  .then(function(){return mcpCall('notifications/initialized',{});})
+  .then(function(){return mcpCall('tools/call',{name:'list_cities',arguments:{}});})
+  .then(function(res){
+    var txt=res&&res.content&&res.content[0]&&res.content[0].text;
+    if(txt){
+      var cities=JSON.parse(txt),sel=document.getElementById('citySelect');
+      Object.entries(cities).sort(function(a,b){return a[1].localeCompare(b[1],'sv');}).forEach(function(e){
+        var o=document.createElement('option');o.value=e[0];o.textContent=e[1];sel.appendChild(o);
+      });
+    }
+  }).catch(function(e){console.error(e);});
+  var today=new Date().toLocaleDateString('sv-SE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('dateLabel').textContent=today.charAt(0).toUpperCase()+today.slice(1);
+}
+function loadCity(slug,name){
+  showLoading('Hamtar luncher i '+name+'...');
+  mcpCall('tools/call',{name:'get_lunch_guide',arguments:{city:slug}}).then(function(res){
+    var txt=res&&res.content&&res.content[0]&&res.content[0].text;
+    if(txt)render(JSON.parse(txt),name);else showErr('Inga luncher hittades.');
+  }).catch(function(){showErr('Kunde inte hamta data.');});
+}
+function loadNear(lat,lon,slug,name){
+  showLoading('Soker luncher nara dig...');
+  mcpCall('tools/call',{name:'get_lunch_near',arguments:{city:slug,lat:lat,lon:lon,radius_km:2.0}}).then(function(res){
+    var txt=res&&res.content&&res.content[0]&&res.content[0].text;
+    if(txt){render(JSON.parse(txt),name);}else{loadCity(slug,name);}
+  }).catch(function(){loadCity(slug,name);});
+}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function render(data,cityName){
+  var rests=Array.isArray(data)?data:(data.restaurants||[]);
+  var grid=document.getElementById('grid');
+  grid.innerHTML='';
+  if(!rests.length){showErr('Inga luncher hittades idag.');return;}
+  var cl=document.getElementById('countLabel');
+  cl.style.display='block';
+  cl.innerHTML='<strong>'+rests.length+'</strong> restauranger med lunch i '+cityName+' idag';
+  rests.forEach(function(r){
+    var dishes=r.dishes||[],closed=r.closed||(!dishes.length)||dishes.every(function(d){return d.closed;});
+    var card=document.createElement('div');card.className='card';
+    var ini=r.name.split(' ').slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase()||'?';
+    var logoH=r.logo?'<img class="card-logo" src="'+esc(r.logo)+'" alt="" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'">':'';
+    var phH='<div class="card-logo-ph"'+(r.logo?' style="display:none"':'')+'>'+ini+'</div>';
+    var dishH='';
+    if(closed){dishH='<p class="dish-closed">Stangd idag</p>';}
+    else if(dishes.length){dishH='<ul class="dishes">'+dishes.slice(0,6).map(function(d){return '<li class="dish"><span class="dish-name">'+(d.vegetarian?'<span class="badge-veg">V</span> ':'')+esc(d.name)+'</span>'+(d.price?'<span class="dish-price">'+d.price+' kr</span>':'')+'</li>';}).join('')+'</ul>';}
+    card.innerHTML='<div class="card-header"><div><div class="card-name">'+esc(r.name)+'</div>'+(r.source?'<div class="card-source">'+esc(r.source)+'</div>':'')+'</div><div style="display:flex;gap:6px;flex-shrink:0">'+logoH+phH+'</div></div>'+dishH;
+    grid.appendChild(card);
+  });
+  document.getElementById('status').style.display='none';
+  grid.style.display='grid';
+}
+function showLoading(msg){document.getElementById('status').style.display='block';document.getElementById('status').innerHTML='<div class="spinner"></div><p>'+msg+'</p>';document.getElementById('grid').style.display='none';document.getElementById('countLabel').style.display='none';}
+function showErr(msg){document.getElementById('status').style.display='block';document.getElementById('status').innerHTML='<p>'+msg+'</p>';document.getElementById('grid').style.display='none';}
+function useGeolocation(){
+  if(!navigator.geolocation){alert('Geolocation stods inte.');return;}
+  document.getElementById('geoBtn').textContent='Soker...';
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var lat=pos.coords.latitude,lon=pos.coords.longitude;
+    fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lon+'&format=json')
+    .then(function(r){return r.json();})
+    .then(function(geo){
+      var city=(geo.address&&(geo.address.city||geo.address.town||geo.address.municipality))||'stockholm';
+      var slug=city.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+      document.getElementById('locationBadge').style.display='flex';
+      document.getElementById('locationText').textContent=city;
+      var sel=document.getElementById('citySelect');
+      var match=Array.from(sel.options).find(function(o){return o.value===slug||o.textContent.toLowerCase()===city.toLowerCase();});
+      var fs=match?match.value:'stockholm',fn=match?match.textContent:'Stockholm';
+      if(match)sel.value=match.value;
+      document.getElementById('geoBtn').textContent='Uppdatera plats';
+      loadNear(lat,lon,fs,fn);
+    }).catch(function(){loadCity('stockholm','Stockholm');});
+  },function(){document.getElementById('geoBtn').textContent='Hitta min plats';loadCity('stockholm','Stockholm');});
+}
+document.getElementById('citySelect').addEventListener('change',function(e){
+  var slug=e.target.value;if(!slug)return;
+  var name=e.target.options[e.target.selectedIndex].text;
+  document.getElementById('locationBadge').style.display='none';
+  loadCity(slug,name);
+});
+init();
+</script>
+</body>
+</html>
