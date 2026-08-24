@@ -1,193 +1,831 @@
 <!doctype html>
 <html lang="sv">
 <head>
-<meta charset="utf-8" />
-<title>Lunchguide -- teamleader.se</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="utf-8">
+<title>Lunchguide · teamleader/se</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Dagens lunchmenyer i svenska städer — hämtat live via MCP.">
+<meta name="color-scheme" content="dark">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#07070d;--ink:#ecedf3;--ink-dim:#8a8da1;--line:rgba(236,237,243,0.08);--teal:#2bd4d9;--indigo:#6366f1;--card-bg:rgba(255,255,255,0.03);--card-border:rgba(255,255,255,0.07)}
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--bg);color:var(--ink);font-family:'Space Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
-body{background:radial-gradient(ellipse 80% 60% at 15% 5%,rgba(43,212,217,.12),transparent 60%),radial-gradient(ellipse 70% 50% at 85% 20%,rgba(233,75,175,.14),transparent 60%),radial-gradient(ellipse 60% 50% at 60% 80%,rgba(99,102,241,.12),transparent 60%),var(--bg)}
-body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);background-size:56px 56px;mask-image:radial-gradient(ellipse at 50% 30%,black 30%,transparent 80%)}
-nav.top{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:24px 48px;border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;text-decoration:none;color:var(--ink)}
-.brand-mark{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,var(--teal),var(--indigo));display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff}
-.nav-links{display:flex;gap:32px;align-items:center}
-.nav-links a{color:var(--ink-dim);text-decoration:none;font-size:14px;transition:color .2s}
-.nav-links a:hover{color:var(--ink)}
-.nav-links a.active{color:var(--teal)}
-main{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:48px 24px 80px}
-.page-header{margin-bottom:40px}
-.page-header h1{font-size:32px;font-weight:700;letter-spacing:-.02em}
-.page-header h1 span{color:var(--teal)}
-.page-header p{color:var(--ink-dim);font-size:15px;margin-top:8px}
-.controls{display:flex;align-items:center;gap:12px;margin-bottom:36px;flex-wrap:wrap}
-</style>
-.city-select{background:var(--card-bg);border:1px solid var(--card-border);color:var(--ink);font-family:'Space Grotesk',sans-serif;font-size:14px;padding:10px 16px;border-radius:8px;cursor:pointer;outline:none;min-width:200px;transition:border-color .2s}
-.city-select:hover,.city-select:focus{border-color:rgba(43,212,217,.4)}
-.city-select option{background:#1a1a2e}
-.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;border:1px solid var(--card-border);background:var(--card-bg);color:var(--ink);font-family:'Space Grotesk',sans-serif;transition:all .2s}
-.btn:hover{border-color:rgba(43,212,217,.4);background:rgba(43,212,217,.06)}
-.btn svg{width:16px;height:16px}
-.location-badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--teal);font-family:'JetBrains Mono',monospace;background:rgba(43,212,217,.08);border:1px solid rgba(43,212,217,.2);padding:6px 12px;border-radius:20px}
-.status{text-align:center;padding:60px 24px;color:var(--ink-dim);font-size:15px}
-.spinner{width:32px;height:32px;border:2px solid var(--card-border);border-top-color:var(--teal);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
-@keyframes spin{to{transform:rotate(360deg)}}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
-.card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:12px;padding:20px;transition:border-color .2s,background .2s}
-.card:hover{border-color:rgba(43,212,217,.2);background:rgba(43,212,217,.03)}
-.card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
-.card-logo{width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0}
-.card-logo-ph{width:40px;height:40px;border-radius:8px;background:rgba(99,102,241,.2);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;flex-shrink:0;color:var(--indigo)}
-.card-name{font-size:15px;font-weight:600;line-height:1.3}
-.card-source{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--ink-dim);margin-top:3px}
-.badge-veg{display:inline-block;font-size:10px;font-family:'JetBrains Mono',monospace;padding:2px 6px;border-radius:4px;font-weight:600;background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.2)}
-.dishes{list-style:none;display:flex;flex-direction:column}
-.dish{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:14px;padding:8px 0;border-bottom:1px solid var(--line)}
-.dish:last-child{border-bottom:none}
-.dish-name{color:var(--ink);flex:1;line-height:1.4}
-.dish-price{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--teal);white-space:nowrap}
-.dish-closed{color:var(--ink-dim);font-style:italic;font-size:13px}
-.date-label{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-dim);margin-bottom:24px}
-.count-label{font-size:14px;color:var(--ink-dim);margin-bottom:24px}
-.count-label strong{color:var(--ink)}
-footer{position:relative;z-index:1;text-align:center;padding:32px;border-top:1px solid var(--line);font-size:13px;color:var(--ink-dim);font-family:'JetBrains Mono',monospace}
-footer a{color:var(--teal);text-decoration:none}
+:root{
+  --bg:#0f0e0d;
+  --surface:#1a1917;
+  --surface-alt:#222120;
+  --border:#2e2c2a;
+  --accent:#c9a96e;
+  --accent-muted:#8a7250;
+  --text-primary:#f0ece6;
+  --text-muted:#8a8480;
+  --tag-bg:#2a2724;
+  --serif:"Playfair Display",Georgia,"Times New Roman",serif;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --head-h:64px;
+  --page:1180px;
+}
+*,*::before,*::after{box-sizing:border-box}
+body,h1,h2,h3,p,ul,ol,li,figure{margin:0;padding:0}
+ul{list-style:none}
+html{-webkit-text-size-adjust:100%}
+body{
+  background:var(--bg);
+  color:var(--text-primary);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+.mono{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--text-muted)}
+.shell{width:100%;max-width:var(--page);margin:0 auto;padding:0 32px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+
+/* ── header ─────────────────────────────────────────────── */
+.site-head{
+  position:fixed;top:0;left:0;right:0;z-index:50;height:var(--head-h);
+  display:flex;align-items:center;
+  background:transparent;border-bottom:1px solid transparent;
+  transition:background .25s ease,border-color .25s ease,backdrop-filter .25s ease;
+}
+.site-head.solid{
+  background:rgba(15,14,13,.86);
+  border-bottom-color:var(--border);
+  backdrop-filter:saturate(140%) blur(10px);
+}
+.site-head .shell{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand{
+  display:inline-flex;align-items:center;gap:9px;
+  font-family:var(--mono);font-size:13px;letter-spacing:.02em;
+  color:var(--text-primary);text-decoration:none;
+}
+.brand b{font-weight:500}
+.brand .sep{color:var(--accent)}
+.brand i{font-style:normal;color:var(--text-muted)}
+.brand-mark{width:9px;height:9px;border-radius:50%;background:var(--accent);flex:none}
+.back{text-decoration:none;transition:color .2s ease;white-space:nowrap}
+.back:hover{color:var(--accent)}
+
+/* ── hero ───────────────────────────────────────────────── */
+main{flex:1;padding-top:var(--head-h)}
+.hero{padding:76px 0 8px}
+.eyebrow{display:block;margin-bottom:22px}
+.eyebrow .dot{color:var(--accent)}
+h1{
+  font-family:var(--serif);font-weight:900;
+  font-size:clamp(44px,7.4vw,88px);line-height:.98;letter-spacing:-.02em;
+  max-width:14ch;
+}
+h1 .city{color:var(--accent);display:inline-block}
+h1 .city.swap{animation:citySwap .32s ease both}
+@keyframes citySwap{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ── city picker ────────────────────────────────────────── */
+.picker{margin-top:46px;border-top:1px solid var(--border);padding-top:18px}
+.picker-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+.picker-tools{display:flex;align-items:center;gap:16px}
+.near-btn{
+  flex:none;cursor:pointer;background:transparent;border:1px solid var(--border);border-radius:999px;
+  color:var(--text-muted);padding:6px 13px;
+  transition:color .2s ease,border-color .2s ease,background .2s ease;
+}
+.near-btn:hover:not(:disabled){color:var(--accent);border-color:var(--accent-muted);background:var(--surface)}
+.near-btn[aria-pressed="true"]{color:var(--accent);border-color:var(--accent);background:rgba(201,169,110,.07)}
+.near-btn:disabled{opacity:.55;cursor:progress}
+.city-filter{
+  width:190px;background:transparent;border:0;border-bottom:1px solid var(--border);
+  color:var(--text-primary);font-family:var(--mono);font-size:12px;padding:6px 2px;
+  transition:border-color .2s ease;
+}
+.city-filter::placeholder{color:var(--text-muted)}
+.city-filter:focus{outline:0;border-bottom-color:var(--accent)}
+.pills{
+  display:flex;gap:8px;overflow-x:auto;overflow-anchor:none;padding:4px 2px 14px;
+  scrollbar-width:thin;scrollbar-color:var(--border) transparent;
+  -webkit-overflow-scrolling:touch;
+}
+.pills::-webkit-scrollbar{height:4px}
+.pills::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.pill{
+  /* Keep the browser's scroll anchoring from nudging the strip sideways when
+     the card grid is inserted below it. */
+  overflow-anchor:none;
+  flex:none;cursor:pointer;white-space:nowrap;
+  background:var(--surface);border:1px solid var(--border);border-radius:999px;
+  color:var(--text-muted);font-family:var(--sans);font-size:13px;font-weight:500;
+  padding:7px 15px;transition:color .2s ease,border-color .2s ease,background .2s ease,box-shadow .2s ease;
+}
+.pill:hover{color:var(--text-primary);border-color:var(--accent-muted);background:var(--surface-alt)}
+.pill[aria-pressed="true"]{
+  color:var(--accent);border-color:var(--accent);background:rgba(201,169,110,.07);
+  box-shadow:0 0 0 3px rgba(201,169,110,.08);
+}
+
+/* ── results ────────────────────────────────────────────── */
+.results{padding:26px 0 96px}
+.result-meta{display:flex;align-items:baseline;gap:10px;min-height:18px;margin-bottom:24px}
+.result-meta b{color:var(--text-primary);font-weight:500}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:start}
+
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:22px 22px 20px;
+  transition:border-color .15s ease,transform .15s ease,background .15s ease;
+}
+.card.enter{animation:cardIn .42s cubic-bezier(.22,.7,.3,1) both;animation-delay:calc(var(--i) * 50ms)}
+@keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.card:hover{border-color:var(--accent-muted);background:var(--surface-alt);transform:translateY(-2px)}
+.card.is-closed{opacity:.62}
+
+.card-head{display:flex;align-items:center;gap:13px;margin-bottom:18px}
+.logo,.logo-ph{width:42px;height:42px;border-radius:50%;flex:none}
+.logo{object-fit:cover;background:var(--surface-alt)}
+.logo-ph{
+  display:grid;place-items:center;background:var(--tag-bg);
+  border:1px solid var(--border);color:var(--accent);
+  font-family:var(--serif);font-weight:700;font-size:17px;line-height:1;
+}
+.card-name{font-family:var(--serif);font-weight:700;font-size:20px;line-height:1.2;letter-spacing:-.01em}
+.card-sub{display:block;margin-top:4px}
+
+.dishes{border-top:1px solid var(--border)}
+.dish{padding:11px 0;border-bottom:1px solid var(--border)}
+.dish:last-child{border-bottom:0;padding-bottom:0}
+.dish-row{display:flex;align-items:baseline;gap:8px}
+.dish-name{font-size:14.5px;line-height:1.45}
+.leader{flex:1;min-width:14px;border-bottom:1px dotted var(--border);transform:translateY(-3px)}
+.price{flex:none;font-family:var(--mono);font-size:12.5px;color:var(--accent);white-space:nowrap}
+.dish-label{margin-bottom:3px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-muted)}
+.dish-desc{margin-top:3px;font-size:13px;line-height:1.5;color:var(--text-muted)}
+.note{font-size:13.5px;line-height:1.55;color:var(--text-muted);padding:11px 0 0}
+.note.closed{color:var(--text-primary)}
+.note.closed::before{content:"● ";color:var(--accent-muted);font-size:10px;vertical-align:middle}
+
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.tag{
+  background:var(--tag-bg);border:1px solid var(--border);border-radius:4px;
+  color:var(--text-muted);font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;
+  padding:2px 7px;
+}
+.more{
+  margin-top:14px;background:transparent;border:0;padding:0;cursor:pointer;
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;color:var(--accent-muted);
+  transition:color .2s ease;
+}
+.more:hover{color:var(--accent)}
+
+/* ── skeleton ───────────────────────────────────────────── */
+.sk{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px}
+.sk-line{background:var(--surface-alt);border-radius:4px;position:relative;overflow:hidden}
+.sk-line::after{
+  content:"";position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,rgba(240,236,230,.055),transparent);
+  animation:shimmer 1.4s infinite;
+}
+@keyframes shimmer{100%{transform:translateX(100%)}}
+.sk-head{display:flex;align-items:center;gap:13px;margin-bottom:20px}
+.sk-avatar{width:42px;height:42px;border-radius:50%;flex:none}
+.sk-rows{display:flex;flex-direction:column;gap:11px}
+
+/* ── states ─────────────────────────────────────────────── */
+.state{padding:56px 0;font-family:var(--mono);font-size:13px;color:var(--text-muted);line-height:1.9}
+.state .retry{
+  background:transparent;border:0;padding:0;margin-left:6px;cursor:pointer;
+  font:inherit;color:var(--accent);text-decoration:underline;text-underline-offset:3px;
+}
+
+/* ── footer ─────────────────────────────────────────────── */
+.site-foot{border-top:1px solid var(--border);padding:22px 0 30px}
+.site-foot .shell{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+
+/* ── responsive ─────────────────────────────────────────── */
+@media (max-width:1024px){
+  .grid{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:768px){
+  .shell{padding:0 20px}
+  .hero{padding:52px 0 4px}
+  h1{max-width:none}
+  .grid{grid-template-columns:1fr}
+  .picker-head{flex-direction:column;align-items:flex-start;gap:10px}
+  .picker-tools{width:100%;gap:12px}
+  .city-filter{flex:1;width:auto;min-width:0}
+  .back{font-size:11px}
+  .back-long{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  .card:hover{transform:none}
+}
 </style>
 </head>
 <body>
-<nav class="top">
-  <a href="/" class="brand"><div class="brand-mark">tl</div>teamleader.se</a>
-  <div class="nav-links"><a href="/">Hem</a><a href="/lunchguide" class="active">Lunchguide</a></div>
-</nav>
+
+<header class="site-head" id="siteHead">
+  <div class="shell">
+    <a class="brand" href="/">
+      <span class="brand-mark"></span><b>teamleader</b><span class="sep">/</span><i>se</i>
+    </a>
+    <a class="back mono" href="/">←<span class="back-long"> tillbaka till</span> teamleader.se</a>
+  </div>
+</header>
+
 <main>
-  <div class="page-header">
-    <h1>Dagens <span>lunchguide</span></h1>
-    <p>Aktuella lunchmenyer hamtade via mcp-lunch.</p>
+  <div class="shell">
+
+    <section class="hero">
+      <p class="eyebrow mono" id="eyebrow">// dagens lunch</p>
+      <h1>Vad äter <span class="city" id="heroCity">Kalmar</span><br>idag?</h1>
+
+      <div class="picker">
+        <div class="picker-head">
+          <span class="mono">// välj stad</span>
+          <div class="picker-tools">
+            <button class="near-btn mono" id="nearBtn" type="button">◎ nära mig</button>
+            <input class="city-filter" id="cityFilter" type="search" placeholder="sök stad…" aria-label="Sök stad" autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+        <div class="pills" id="cityPills" role="group" aria-label="Städer"></div>
+      </div>
+    </section>
+
+    <section class="results">
+      <p class="result-meta mono" id="resultMeta" aria-live="polite"></p>
+      <div id="view"></div>
+    </section>
+
   </div>
-  <div class="controls">
-    <select class="city-select" id="citySelect"><option value="">Valjer stad...</option></select>
-    <button class="btn" id="geoBtn" onclick="useGeolocation()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>
-      Hitta min plats
-    </button>
-    <div id="locationBadge" style="display:none" class="location-badge">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
-      <span id="locationText"></span>
-    </div>
-  </div>
-  <div id="dateLabel" class="date-label"></div>
-  <div id="countLabel" class="count-label" style="display:none"></div>
-  <div id="status" class="status"><p>Valj en stad eller klicka pa Hitta min plats.</p></div>
-  <div id="grid" class="grid" style="display:none"></div>
 </main>
-<footer>Drivs av <a href="/lunchguide">mcp-lunch</a> &middot; <a href="/">teamleader.se</a></footer>
+
+<footer class="site-foot">
+  <div class="shell">
+    <span class="mono">© 2026 teamleader.se · Stockholm · Sweden</span>
+    <span class="mono">// powered by mcp · lunchguide.mcp</span>
+  </div>
+</footer>
+
 <script>
-var MCP='/lunchguide',mid=1,sid=null;
-function mcpCall(method,params){
-  var h={'Content-Type':'application/json','Accept':'application/json, text/event-stream'};
-  if(sid)h['Mcp-Session-Id']=sid;
-  return fetch(MCP,{method:'POST',headers:h,body:JSON.stringify({jsonrpc:'2.0',id:mid++,method:method,params:params})}).then(function(r){
-    var s=r.headers.get('Mcp-Session-Id');if(s)sid=s;
-    var ct=r.headers.get('content-type')||'';
-    if(ct.indexOf('text/event-stream')>=0){
-      return r.text().then(function(t){
-        var lines=t.split('\n').filter(function(l){return l.indexOf('data:')==0;});
-        for(var i=0;i<lines.length;i++){try{var d=JSON.parse(lines[i].slice(5));if(d.result)return d.result;}catch(e){}}
-        return null;
+(function () {
+  "use strict";
+
+  var ENDPOINT = "/lunchguide/mcp";
+  var DEFAULT_CITY = "kalmar";
+  var NEAR_RADIUS_KM = 2;
+  var PREVIEW_DISHES = 5;
+
+  var el = {
+    head: document.getElementById("siteHead"),
+    eyebrow: document.getElementById("eyebrow"),
+    heroCity: document.getElementById("heroCity"),
+    pills: document.getElementById("cityPills"),
+    filter: document.getElementById("cityFilter"),
+    near: document.getElementById("nearBtn"),
+    meta: document.getElementById("resultMeta"),
+    view: document.getElementById("view")
+  };
+
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
+  var cities = {};          // slug -> display name
+  var current = null;       // active city slug
+  var reqToken = 0;         // guards against out-of-order responses
+
+  /* ── MCP (stateless streamable HTTP — no initialize handshake needed) ── */
+
+  function callTool(name, args) {
+    return fetch(ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream"
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "tools/call",
+        params: { name: name, arguments: args || {} }
+      })
+    }).then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.text();
+    }).then(function (body) {
+      var msg = parseEnvelope(body);
+      if (!msg || msg.error) throw new Error(msg && msg.error ? msg.error.message : "Tomt svar");
+      var content = msg.result && msg.result.content;
+      var text = content && content[0] && content[0].text;
+      if (!text) throw new Error("Tomt innehåll");
+      return JSON.parse(text);
+    });
+  }
+
+  // The server answers either as plain JSON-RPC or as an SSE frame.
+  function parseEnvelope(body) {
+    var trimmed = body.replace(/^﻿/, "").trim();
+    if (trimmed.charAt(0) === "{") {
+      try { return JSON.parse(trimmed); } catch (e) { /* fall through to SSE */ }
+    }
+    var lines = trimmed.split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf("data:") !== 0) continue;
+      try {
+        var payload = JSON.parse(lines[i].slice(5));
+        if (payload.result || payload.error) return payload;
+      } catch (e) { /* keep scanning */ }
+    }
+    return null;
+  }
+
+  /* ── cache: one entry per city + date, dropped when the day rolls over ── */
+
+  function today() {
+    var d = new Date();
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+
+  function cacheKey(slug) { return "lg:" + slug + ":" + today(); }
+
+  function cacheRead(slug) {
+    try {
+      var raw = sessionStorage.getItem(cacheKey(slug));
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  function cacheWrite(slug, data) {
+    try {
+      sessionStorage.setItem(cacheKey(slug), JSON.stringify(data));
+    } catch (e) { /* private mode / quota — cache is optional */ }
+  }
+
+  /* ── helpers ── */
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function logoSrc(logo) {
+    if (!logo) return "";
+    if (/^https?:\/\//i.test(logo)) return logo;
+    if (logo.charAt(0) === "/") return "/lunchguide/image-proxy?path=" + encodeURIComponent(logo);
+    return "";
+  }
+
+  function monogram(name) {
+    var words = String(name).trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return "?";
+    var first = words[0].charAt(0);
+    var second = words.length > 1 ? words[1].charAt(0) : "";
+    return (first + second).toUpperCase();
+  }
+
+  // Lines with no price that follow a priced dish are the dish's description —
+  // fold them in (carrying their diet tags up) so a card reads as real dishes.
+  function foldDishes(raw) {
+    var out = [];
+    var pendingLabel = "";
+    (raw || []).forEach(function (d, idx) {
+      var prev = out[out.length - 1];
+      var next = raw[idx + 1];
+
+      // A short unpriced line right before a priced dish is a label the site
+      // stamps on the dish ("Nyhet", "Dagens"), not a dish of its own.
+      var isLabel = d.price == null && !d.closed && d.name.length <= 20 &&
+        next && next.price != null && (!prev || prev.price != null);
+      if (isLabel) {
+        pendingLabel = d.name;
+        return;
+      }
+
+      var isDescription = d.price == null && !d.closed && prev && prev.price != null;
+      if (isDescription) {
+        prev.desc.push(d.name);
+        prev.vegetarian = prev.vegetarian || !!d.vegetarian;
+        (d.tags || []).forEach(function (t) {
+          if (prev.tags.indexOf(t) === -1) prev.tags.push(t);
+        });
+        return;
+      }
+      out.push({
+        name: d.name,
+        label: pendingLabel,
+        price: d.price,
+        closed: !!d.closed,
+        vegetarian: !!d.vegetarian,
+        tags: (d.tags || []).slice(),
+        desc: []
+      });
+      pendingLabel = "";
+    });
+    return out;
+  }
+
+  // A restaurant with no priced dish at all is a status message, not a menu.
+  // Its lines arrive fragmented, so glue them back into one sentence.
+  function statusLine(dishes) {
+    var text = dishes.map(function (d) { return d.name; }).join(" ").replace(/\s+/g, " ").trim();
+    var lower = text.toLowerCase();
+    if (!text) return { text: "Ingen meny publicerad idag.", closed: false };
+    if (lower.indexOf("stängt") !== -1) return { text: "Lunchstängt idag.", closed: true };
+    if (lower.indexOf("har inte lagt upp") !== -1) return { text: "Ingen meny publicerad idag.", closed: false };
+    // The last restaurant on a scraped page can absorb the page's own footer.
+    // Anything this long is never a menu note — don't put it on a card.
+    if (text.length > 160) return { text: "Ingen meny publicerad idag.", closed: false };
+    return { text: text, closed: false };
+  }
+
+  /* ── rendering ── */
+
+  function renderCard(r, index) {
+    var dishes = foldDishes(r.dishes);
+    var priced = dishes.filter(function (d) { return d.price != null; });
+    var closedFlag = dishes.length > 0 && dishes.every(function (d) { return d.closed; });
+
+    var src = logoSrc(r.logo);
+    var head =
+      (src
+        ? '<img class="logo" src="' + esc(src) + '" alt="" loading="lazy" ' +
+          'onerror="this.outerHTML=\'<span class=&quot;logo-ph&quot; aria-hidden=&quot;true&quot;>' +
+          esc(monogram(r.name)) + '</span>\'">'
+        : '<span class="logo-ph" aria-hidden="true">' + esc(monogram(r.name)) + "</span>") +
+      '<div><h2 class="card-name">' + esc(r.name) + "</h2>" +
+      cardSub(r, priced, closedFlag) + "</div>";
+
+    var body;
+    if (closedFlag) {
+      body = '<p class="note closed">' + esc(dishes[0].name || "Stängt idag") + "</p>";
+    } else if (!priced.length) {
+      var status = statusLine(dishes);
+      body = '<p class="note' + (status.closed ? " closed" : "") + '">' + esc(status.text) + "</p>";
+    } else {
+      body = dishList(dishes);
+    }
+
+    var card = document.createElement("article");
+    card.className = "card enter" + (closedFlag || !priced.length ? " is-closed" : "");
+    card.style.setProperty("--i", Math.min(index, 11));
+    card.innerHTML = '<div class="card-head">' + head + "</div>" + body;
+    return card;
+  }
+
+  function cardSub(r, priced, closedFlag) {
+    var bits = [];
+    if (r.distance_km != null) bits.push(formatDistance(r.distance_km));
+    if (priced.length && !closedFlag) bits.push(subtitle(priced));
+    if (!bits.length) return "";
+    return '<span class="card-sub mono">' + esc(bits.join(" · ")) + "</span>";
+  }
+
+  function formatDistance(km) {
+    return km < 1 ? Math.round(km * 1000) + " m" : km.toFixed(1).replace(".", ",") + " km";
+  }
+
+  function subtitle(priced) {
+    var min = priced.reduce(function (acc, d) { return Math.min(acc, d.price); }, Infinity);
+    var count = priced.length + (priced.length === 1 ? " rätt" : " rätter");
+    return count + " · från " + min + " kr";
+  }
+
+  function dishList(dishes) {
+    var visible = dishes.slice(0, PREVIEW_DISHES);
+    var hidden = dishes.slice(PREVIEW_DISHES);
+    var html = '<ul class="dishes">' + visible.map(dishRow).join("") + "</ul>";
+    if (hidden.length) {
+      html += '<ul class="dishes" hidden>' + hidden.map(dishRow).join("") + "</ul>" +
+        '<button class="more" type="button">+ visa ' + hidden.length + " till</button>";
+    }
+    return html;
+  }
+
+  function dishRow(d) {
+    var tags = d.tags.length
+      ? '<div class="tags">' + d.tags.map(function (t) {
+          return '<span class="tag">' + esc(t) + "</span>";
+        }).join("") + "</div>"
+      : "";
+    return '<li class="dish">' +
+      (d.label ? '<p class="dish-label mono">' + esc(d.label) + "</p>" : "") +
+      '<div class="dish-row">' +
+        '<span class="dish-name">' + esc(d.name) + "</span>" +
+        '<span class="leader" aria-hidden="true"></span>' +
+        (d.price != null ? '<span class="price">' + d.price + " kr</span>" : "") +
+      "</div>" +
+      (d.desc.length ? '<p class="dish-desc">' + esc(d.desc.join(" ")) + "</p>" : "") +
+      tags +
+      "</li>";
+  }
+
+  function renderList(restaurants, cityName, near) {
+    el.view.innerHTML = "";
+    if (!restaurants.length) {
+      showState(near
+        ? "// inga luncher inom " + NEAR_RADIUS_KM + " km från din position"
+        : "// inga luncher hittades för " + cityName.toLowerCase() + " idag");
+      return;
+    }
+    var open = restaurants.filter(function (r) {
+      return (r.dishes || []).some(function (d) { return d.price != null; });
+    }).length;
+    el.meta.innerHTML = (near ? "inom <b>" + NEAR_RADIUS_KM + " km</b> · " : "") +
+      "<b>" + restaurants.length + "</b> restauranger · <b>" + open + "</b> med publicerad meny";
+
+    var grid = document.createElement("div");
+    grid.className = "grid";
+    restaurants.forEach(function (r, i) { grid.appendChild(renderCard(r, i)); });
+    el.view.appendChild(grid);
+  }
+
+  function showSkeleton() {
+    el.meta.textContent = "// hämtar dagens lunch…";
+    var rows = "";
+    for (var r = 0; r < 4; r++) {
+      rows += '<div class="sk-line" style="height:13px;width:' + (95 - r * 11) + '%"></div>';
+    }
+    var cards = "";
+    for (var i = 0; i < 6; i++) {
+      cards +=
+        '<div class="sk">' +
+          '<div class="sk-head">' +
+            '<div class="sk-line sk-avatar"></div>' +
+            '<div style="flex:1"><div class="sk-line" style="height:17px;width:58%"></div></div>' +
+          "</div>" +
+          '<div class="sk-rows">' + rows + "</div>" +
+        "</div>";
+    }
+    el.view.innerHTML = '<div class="grid">' + cards + "</div>";
+  }
+
+  function showState(text, retry) {
+    el.meta.textContent = "";
+    el.view.innerHTML = '<p class="state">' + esc(text) +
+      (retry ? '<button class="retry" type="button">försök igen</button>' : "") + "</p>";
+    if (retry) {
+      el.view.querySelector(".retry").addEventListener("click", function () {
+        selectCity(current, { force: true });
       });
     }
-    return r.json().then(function(d){return d.result;});
-  });
-}
-function init(){
-  mcpCall('initialize',{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'lunchguide-web',version:'1.0'}})
-  .then(function(){return mcpCall('notifications/initialized',{});})
-  .then(function(){return mcpCall('tools/call',{name:'list_cities',arguments:{}});})
-  .then(function(res){
-    var txt=res&&res.content&&res.content[0]&&res.content[0].text;
-    if(txt){
-      var cities=JSON.parse(txt),sel=document.getElementById('citySelect');
-      Object.entries(cities).sort(function(a,b){return a[1].localeCompare(b[1],'sv');}).forEach(function(e){
-        var o=document.createElement('option');o.value=e[0];o.textContent=e[1];sel.appendChild(o);
+  }
+
+  /* ── city picker ── */
+
+  function buildPills() {
+    var frag = document.createDocumentFragment();
+    Object.keys(cities).sort(function (a, b) {
+      if (a === DEFAULT_CITY) return -1;
+      if (b === DEFAULT_CITY) return 1;
+      return cities[a].localeCompare(cities[b], "sv");
+    }).forEach(function (slug) {
+      var btn = document.createElement("button");
+      btn.className = "pill";
+      btn.type = "button";
+      btn.textContent = cities[slug];
+      btn.dataset.slug = slug;
+      btn.setAttribute("aria-pressed", "false");
+      btn.addEventListener("click", function () { selectCity(slug); });
+      frag.appendChild(btn);
+    });
+    el.pills.innerHTML = "";
+    el.pills.appendChild(frag);
+  }
+
+  var aligned = false;
+  var alignTries = 0;
+
+  function markActive(slug) {
+    var active = null;
+    Array.prototype.forEach.call(el.pills.children, function (btn) {
+      var on = btn.dataset.slug === slug;
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      if (on) active = btn;
+    });
+    // Scroll the strip itself rather than using scrollIntoView, which would
+    // also scroll the page and knock the hero out of view on load.
+    if (active) {
+      var strip = el.pills.getBoundingClientRect();
+      var pill = active.getBoundingClientRect();
+      // Until layout settles the strip can measure narrower than a single pill,
+      // and the centring maths would then shove it half a pill sideways. Wait
+      // for a frame that reports a real width instead.
+      if (strip.width < pill.width) {
+        if (alignTries++ < 30) requestAnimationFrame(function () { markActive(slug); });
+        return;
+      }
+      alignTries = 0;
+      var delta = (pill.left - strip.left) - (strip.width - pill.width) / 2;
+      // The very first alignment happens while the grid is still being built;
+      // a smooth scroll can get dropped in that churn, so snap it into place.
+      el.pills.scrollTo({
+        left: Math.max(0, el.pills.scrollLeft + delta),
+        behavior: aligned ? "smooth" : "auto"
       });
+      aligned = true;
     }
-  }).catch(function(e){console.error(e);});
-  var today=new Date().toLocaleDateString('sv-SE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  document.getElementById('dateLabel').textContent=today.charAt(0).toUpperCase()+today.slice(1);
-}
-function loadCity(slug,name){
-  showLoading('Hamtar luncher i '+name+'...');
-  mcpCall('tools/call',{name:'get_lunch_guide',arguments:{city:slug}}).then(function(res){
-    var txt=res&&res.content&&res.content[0]&&res.content[0].text;
-    if(txt)render(JSON.parse(txt),name);else showErr('Inga luncher hittades.');
-  }).catch(function(){showErr('Kunde inte hamta data.');});
-}
-function loadNear(lat,lon,slug,name){
-  showLoading('Soker luncher nara dig...');
-  mcpCall('tools/call',{name:'get_lunch_near',arguments:{city:slug,lat:lat,lon:lon,radius_km:2.0}}).then(function(res){
-    var txt=res&&res.content&&res.content[0]&&res.content[0].text;
-    if(txt){render(JSON.parse(txt),name);}else{loadCity(slug,name);}
-  }).catch(function(){loadCity(slug,name);});
-}
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function render(data,cityName){
-  var rests=Array.isArray(data)?data:(data.restaurants||[]);
-  var grid=document.getElementById('grid');
-  grid.innerHTML='';
-  if(!rests.length){showErr('Inga luncher hittades idag.');return;}
-  var cl=document.getElementById('countLabel');
-  cl.style.display='block';
-  cl.innerHTML='<strong>'+rests.length+'</strong> restauranger med lunch i '+cityName+' idag';
-  rests.forEach(function(r){
-    var dishes=r.dishes||[],closed=r.closed||(!dishes.length)||dishes.every(function(d){return d.closed;});
-    var card=document.createElement('div');card.className='card';
-    var ini=r.name.split(' ').slice(0,2).map(function(w){return w[0]||'';}).join('').toUpperCase()||'?';
-    var logoH=r.logo?'<img class="card-logo" src="'+esc(r.logo)+'" alt="" onerror="this.style.display=\'none\';this.nextSibling.style.display=\'flex\'">':'';
-    var phH='<div class="card-logo-ph"'+(r.logo?' style="display:none"':'')+'>'+ini+'</div>';
-    var dishH='';
-    if(closed){dishH='<p class="dish-closed">Stangd idag</p>';}
-    else if(dishes.length){dishH='<ul class="dishes">'+dishes.slice(0,6).map(function(d){return '<li class="dish"><span class="dish-name">'+(d.vegetarian?'<span class="badge-veg">V</span> ':'')+esc(d.name)+'</span>'+(d.price?'<span class="dish-price">'+d.price+' kr</span>':'')+'</li>';}).join('')+'</ul>';}
-    card.innerHTML='<div class="card-header"><div><div class="card-name">'+esc(r.name)+'</div>'+(r.source?'<div class="card-source">'+esc(r.source)+'</div>':'')+'</div><div style="display:flex;gap:6px;flex-shrink:0">'+logoH+phH+'</div></div>'+dishH;
-    grid.appendChild(card);
+  }
+
+  function filterPills(query) {
+    var q = query.trim().toLowerCase();
+    Array.prototype.forEach.call(el.pills.children, function (btn) {
+      var name = cities[btn.dataset.slug].toLowerCase();
+      btn.hidden = q !== "" && name.indexOf(q) === -1 && btn.dataset.slug.indexOf(q) === -1;
+    });
+  }
+
+  function setHero(cityName) {
+    el.heroCity.textContent = cityName;
+    el.heroCity.classList.remove("swap");
+    void el.heroCity.offsetWidth;
+    el.heroCity.classList.add("swap");
+
+    var date = new Date().toLocaleDateString("sv-SE", {
+      weekday: "long", day: "numeric", month: "long"
+    });
+    el.eyebrow.innerHTML = '// dagens lunch <span class="dot">·</span> ' + esc(date) +
+      ' <span class="dot">·</span> ' + esc(cityName.toLowerCase());
+  }
+
+  function selectCity(slug, opts) {
+    if (!slug || !cities[slug]) return;
+    var force = opts && opts.force;
+    var name = cities[slug];
+    setNearActive(false);
+    current = slug;
+    markActive(slug);
+    setHero(name);
+
+    var url = slug === DEFAULT_CITY ? location.pathname : location.pathname + "?stad=" + slug;
+    history.replaceState(null, "", url);
+
+    var cached = force ? null : cacheRead(slug);
+    if (cached) { renderList(cached, name); return; }
+
+    var token = ++reqToken;
+    showSkeleton();
+    callTool("get_lunch_guide", { city: slug }).then(function (data) {
+      if (token !== reqToken) return;
+      var list = Array.isArray(data) ? data : (data.restaurants || []);
+      cacheWrite(slug, list);
+      renderList(list, name);
+    }).catch(function (err) {
+      if (token !== reqToken) return;
+      console.error(err);
+      showState("// kunde inte hämta luncher för " + name.toLowerCase() + " — ", true);
+    });
+  }
+
+  /* ── "nära mig": position → city → get_lunch_near ── */
+
+  function setNearBusy(busy) {
+    el.near.disabled = busy;
+    el.near.textContent = busy ? "◎ söker…" : "◎ nära mig";
+  }
+
+  function setNearActive(on) {
+    el.near.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+
+  // "Göteborgs kommun" → "goteborg", so it can be matched against a city slug.
+  function normalise(name) {
+    return String(name).toLowerCase()
+      .replace(/\s+(kommun|municipality|tätort)$/, "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  }
+
+  function matchCity(name) {
+    var key = normalise(name);
+    if (cities[key]) return key;
+    var slugs = Object.keys(cities);
+    for (var i = 0; i < slugs.length; i++) {
+      if (normalise(cities[slugs[i]]) === key) return slugs[i];
+    }
+    return null;
+  }
+
+  function reverseGeocode(lat, lon) {
+    var url = "https://nominatim.openstreetmap.org/reverse?format=json&zoom=10&lat=" +
+      encodeURIComponent(lat) + "&lon=" + encodeURIComponent(lon);
+    return fetch(url, { headers: { "Accept": "application/json" } })
+      .then(function (r) { return r.json(); })
+      .then(function (geo) {
+        var a = geo && geo.address;
+        if (!a) return null;
+        return a.city || a.town || a.village || a.municipality || a.county || null;
+      });
+  }
+
+  function loadNear(slug, lat, lon) {
+    var name = cities[slug];
+    var token = ++reqToken;
+    current = slug;
+    markActive(slug);
+    setNearActive(true);
+    setHero(name);
+    history.replaceState(null, "", location.pathname + "?stad=" + slug + "&nara=1");
+    showSkeleton();
+
+    // Position-dependent, so deliberately not written to the per-city cache.
+    callTool("get_lunch_near", { city: slug, lat: lat, lon: lon, radius_km: NEAR_RADIUS_KM })
+      .then(function (data) {
+        if (token !== reqToken) return;
+        setNearBusy(false);
+        renderList(Array.isArray(data) ? data : (data.restaurants || []), name, true);
+      })
+      .catch(function (err) {
+        if (token !== reqToken) return;
+        setNearBusy(false);
+        console.error(err);
+        showState("// kunde inte hämta luncher nära dig — ", true);
+      });
+  }
+
+  function locate() {
+    if (!navigator.geolocation) {
+      showState("// din webbläsare stödjer inte platsdelning");
+      return;
+    }
+    setNearBusy(true);
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      var lat = pos.coords.latitude, lon = pos.coords.longitude;
+      reverseGeocode(lat, lon).then(function (place) {
+        var slug = place && matchCity(place);
+        if (!slug) {
+          setNearBusy(false);
+          setNearActive(false);
+          showState(place
+            ? "// vi har ingen lunchguide för " + place.toLowerCase() + " än"
+            : "// kunde inte avgöra vilken stad du är i");
+          return;
+        }
+        loadNear(slug, lat, lon);
+      }).catch(function (err) {
+        setNearBusy(false);
+        setNearActive(false);
+        console.error(err);
+        showState("// kunde inte avgöra vilken stad du är i");
+      });
+    }, function (err) {
+      setNearBusy(false);
+      setNearActive(false);
+      showState(err && err.code === 1
+        ? "// platsdelning nekad — välj en stad ovan istället"
+        : "// kunde inte hämta din position");
+    }, { timeout: 10000, maximumAge: 300000 });
+  }
+
+  /* ── wiring ── */
+
+  el.near.addEventListener("click", function () {
+    if (el.near.getAttribute("aria-pressed") === "true") {
+      selectCity(current, { force: true });   // leave near-mode
+      return;
+    }
+    locate();
   });
-  document.getElementById('status').style.display='none';
-  grid.style.display='grid';
-}
-function showLoading(msg){document.getElementById('status').style.display='block';document.getElementById('status').innerHTML='<div class="spinner"></div><p>'+msg+'</p>';document.getElementById('grid').style.display='none';document.getElementById('countLabel').style.display='none';}
-function showErr(msg){document.getElementById('status').style.display='block';document.getElementById('status').innerHTML='<p>'+msg+'</p>';document.getElementById('grid').style.display='none';}
-function useGeolocation(){
-  if(!navigator.geolocation){alert('Geolocation stods inte.');return;}
-  document.getElementById('geoBtn').textContent='Soker...';
-  navigator.geolocation.getCurrentPosition(function(pos){
-    var lat=pos.coords.latitude,lon=pos.coords.longitude;
-    fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lon+'&format=json')
-    .then(function(r){return r.json();})
-    .then(function(geo){
-      var city=(geo.address&&(geo.address.city||geo.address.town||geo.address.municipality))||'stockholm';
-      var slug=city.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
-      document.getElementById('locationBadge').style.display='flex';
-      document.getElementById('locationText').textContent=city;
-      var sel=document.getElementById('citySelect');
-      var match=Array.from(sel.options).find(function(o){return o.value===slug||o.textContent.toLowerCase()===city.toLowerCase();});
-      var fs=match?match.value:'stockholm',fn=match?match.textContent:'Stockholm';
-      if(match)sel.value=match.value;
-      document.getElementById('geoBtn').textContent='Uppdatera plats';
-      loadNear(lat,lon,fs,fn);
-    }).catch(function(){loadCity('stockholm','Stockholm');});
-  },function(){document.getElementById('geoBtn').textContent='Hitta min plats';loadCity('stockholm','Stockholm');});
-}
-document.getElementById('citySelect').addEventListener('change',function(e){
-  var slug=e.target.value;if(!slug)return;
-  var name=e.target.options[e.target.selectedIndex].text;
-  document.getElementById('locationBadge').style.display='none';
-  loadCity(slug,name);
-});
-init();
+
+  el.filter.addEventListener("input", function () { filterPills(this.value); });
+
+  el.view.addEventListener("click", function (ev) {
+    var btn = ev.target.closest && ev.target.closest(".more");
+    if (!btn) return;
+    var hiddenList = btn.previousElementSibling;
+    hiddenList.hidden = false;
+    btn.remove();
+  });
+
+  // Pill widths shift when the webfonts swap in; realign once they settle.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { if (current) markActive(current); });
+  }
+
+  var onScroll = function () {
+    el.head.classList.toggle("solid", window.scrollY > 12);
+  };
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  function startCity() {
+    var wanted = new URLSearchParams(location.search).get("stad");
+    return wanted && cities[wanted] ? wanted : (cities[DEFAULT_CITY] ? DEFAULT_CITY : Object.keys(cities)[0]);
+  }
+
+  setHero(DEFAULT_CITY.charAt(0).toUpperCase() + DEFAULT_CITY.slice(1));
+  showSkeleton();
+
+  callTool("list_cities", {}).then(function (data) {
+    cities = data || {};
+    buildPills();
+    selectCity(startCity(), { force: true });
+  }).catch(function (err) {
+    console.error(err);
+    showState("// kunde inte ladda städer — ", false);
+  });
+})();
 </script>
 </body>
 </html>
