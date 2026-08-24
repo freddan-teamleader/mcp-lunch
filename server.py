@@ -34,7 +34,7 @@ from urllib.parse import parse_qs
 
 import httpx
 from bs4 import BeautifulSoup
-from mcp.server.mcpserver import MCPServer
+from mcp.server import MCPServer
 
 # ---------------------------------------------------------------------------
 # MCP app
