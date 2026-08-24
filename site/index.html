@@ -9,15 +9,18 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #07070d;
-    --bg-2: #0d0d18;
-    --ink: #ecedf3;
-    --ink-dim: #8a8da1;
-    --line: rgba(236,237,243,0.08);
-    --teal: #2bd4d9;
-    --indigo: #6366f1;
-    --magenta: #e94baf;
-    --gold: #ffb547;
+    /* Warm palette, shared with the lunch guide (site/lunchguide.html).
+       --teal / --indigo / --magenta keep their names so the 45+ references
+       below stay valid; the hues are now gold → bronze → copper. */
+    --bg: #0f0e0d;
+    --bg-2: #1a1917;
+    --ink: #f0ece6;
+    --ink-dim: #8a8480;
+    --line: rgba(240,236,230,0.08);
+    --teal: #c9a96e;      /* gold — primary accent */
+    --indigo: #a87f4a;    /* bronze — secondary */
+    --magenta: #c2703f;   /* copper — tertiary */
+    --gold: #e3bd82;      /* light gold — highlight */
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: var(--bg); }
@@ -27,9 +30,9 @@
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
     background:
-      radial-gradient(ellipse 80% 60% at 15% 5%, rgba(43,212,217,0.18), transparent 60%),
-      radial-gradient(ellipse 70% 50% at 85% 20%, rgba(233,75,175,0.20), transparent 60%),
-      radial-gradient(ellipse 60% 50% at 60% 80%, rgba(99,102,241,0.18), transparent 60%),
+      radial-gradient(ellipse 80% 60% at 15% 5%, rgba(201,169,110,0.18), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 85% 20%, rgba(194,112,63,0.20), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 60% 80%, rgba(168,127,74,0.18), transparent 60%),
       var(--bg);
     min-height: 100vh;
   }
@@ -39,8 +42,8 @@
   body::before {
     content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
     background-image:
-      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+      linear-gradient(rgba(240,236,230,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(240,236,230,0.025) 1px, transparent 1px);
     background-size: 56px 56px;
     mask-image: radial-gradient(ellipse at 50% 30%, black 30%, transparent 80%);
   }
@@ -73,7 +76,7 @@
   .nav-links a:hover { color: var(--ink); }
 
   .nav-right { display: flex; align-items: center; gap: 16px; }
-  .lang { display: flex; background: rgba(255,255,255,0.04); border-radius: 6px; padding: 3px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .lang { display: flex; background: rgba(240,236,230,0.04); border-radius: 6px; padding: 3px; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
   .lang button { border: 0; background: transparent; padding: 5px 10px; border-radius: 4px; color: var(--ink-dim); cursor: pointer; font-family: inherit; font-size: inherit; letter-spacing: 0.04em; }
   .lang button.on { background: var(--ink); color: var(--bg); }
 
@@ -105,9 +108,9 @@
     text-decoration: none; cursor: pointer; border: 0; transition: all .2s ease;
   }
   .btn-primary { background: var(--ink); color: var(--bg); }
-  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 12px 32px -8px rgba(43,212,217,0.4); }
-  .btn-ghost { background: rgba(255,255,255,0.04); color: var(--ink); border: 1px solid var(--line); }
-  .btn-ghost:hover { background: rgba(255,255,255,0.08); }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 12px 32px -8px rgba(201,169,110,0.4); }
+  .btn-ghost { background: rgba(240,236,230,0.04); color: var(--ink); border: 1px solid var(--line); }
+  .btn-ghost:hover { background: rgba(240,236,230,0.08); }
 
   .stack-vis {
     position: relative; aspect-ratio: 1/1; max-width: 540px; justify-self: end;
@@ -122,7 +125,7 @@
     font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink-dim);
   }
   .rail .label { color: var(--ink-dim); letter-spacing: 0.12em; text-transform: uppercase; margin-right: 8px; }
-  .rail .pill { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); background: rgba(255,255,255,0.02); }
+  .rail .pill { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); background: rgba(240,236,230,0.02); }
 
   /* ----------- Tech grid ----------- */
   .tech { padding: 100px 48px 80px; position: relative; z-index: 2; }
@@ -133,15 +136,15 @@
 
   .tech-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
   .card {
-    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+    background: linear-gradient(180deg, rgba(240,236,230,0.04), rgba(240,236,230,0.015));
     border: 1px solid var(--line); border-radius: 18px; padding: 28px;
     position: relative; overflow: hidden;
     transition: border-color .2s ease, transform .2s ease;
   }
-  .card:hover { border-color: rgba(255,255,255,0.18); transform: translateY(-2px); }
+  .card:hover { border-color: rgba(240,236,230,0.18); transform: translateY(-2px); }
   .card .icon {
     width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center;
-    background: linear-gradient(135deg, rgba(43,212,217,0.16), rgba(233,75,175,0.16));
+    background: linear-gradient(135deg, rgba(201,169,110,0.16), rgba(194,112,63,0.16));
     border: 1px solid var(--line);
     font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 14px;
     margin-bottom: 24px;
@@ -157,10 +160,10 @@
 
   .card.hero-card {
     background:
-      radial-gradient(circle at 80% 20%, rgba(233,75,175,0.25), transparent 50%),
-      radial-gradient(circle at 20% 80%, rgba(43,212,217,0.25), transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(194,112,63,0.25), transparent 50%),
+      radial-gradient(circle at 20% 80%, rgba(201,169,110,0.25), transparent 50%),
       var(--bg-2);
-    border: 1px solid rgba(255,255,255,0.16);
+    border: 1px solid rgba(240,236,230,0.16);
   }
   .card.hero-card .icon { background: linear-gradient(135deg, var(--teal), var(--indigo)); border: 0; color: var(--bg); }
   .card.hero-card h3 { font-size: 28px; }
@@ -175,9 +178,9 @@
   .chat-panel {
     background: var(--bg-2); border: 1px solid var(--line); border-radius: 20px; overflow: hidden;
     display: grid; grid-template-columns: 280px 1fr; min-height: 540px;
-    box-shadow: 0 40px 80px -30px rgba(43,212,217,0.25);
+    box-shadow: 0 40px 80px -30px rgba(201,169,110,0.25);
   }
-  .chat-side { background: rgba(255,255,255,0.02); border-right: 1px solid var(--line); padding: 22px; display: flex; flex-direction: column; gap: 18px; }
+  .chat-side { background: rgba(240,236,230,0.02); border-right: 1px solid var(--line); padding: 22px; display: flex; flex-direction: column; gap: 18px; }
   .chat-side h4 { font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); margin: 0 0 4px; font-weight: 500; }
   .trace-list { display: flex; flex-direction: column; gap: 2px; }
   .trace-step {
@@ -187,7 +190,7 @@
     cursor: pointer; transition: color .2s ease, background .2s ease, border-color .2s ease;
     align-items: center;
   }
-  .trace-step:hover { background: rgba(255,255,255,0.03); color: var(--ink); }
+  .trace-step:hover { background: rgba(240,236,230,0.03); color: var(--ink); }
   .trace-step .ts-idx { font-size: 10px; opacity: 0.55; }
   .trace-step .ts-name { letter-spacing: 0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .trace-step .ts-time { color: var(--ink-dim); font-size: 10px; }
@@ -195,7 +198,7 @@
   .trace-step.done .ts-time { color: var(--teal); }
   .trace-step.active {
     border-left-color: var(--teal); color: var(--teal);
-    background: rgba(43,212,217,0.10);
+    background: rgba(201,169,110,0.10);
   }
   .trace-step.active .ts-time { color: var(--teal); }
 
@@ -204,7 +207,7 @@
     display: flex; gap: 12px; align-items: center; text-decoration: none; color: var(--ink);
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 1.4;
     padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);
-    background: linear-gradient(135deg, rgba(43,212,217,0.06), rgba(233,75,175,0.06));
+    background: linear-gradient(135deg, rgba(201,169,110,0.06), rgba(194,112,63,0.06));
     transition: border-color .2s ease, transform .2s ease;
   }
   .real-link:hover { border-color: var(--teal); transform: translateY(-1px); }
@@ -221,7 +224,7 @@
   .chat-body { flex: 1; overflow-y: auto; padding: 24px; max-height: 380px; }
   .msg { margin-bottom: 18px; display: flex; gap: 12px; align-items: flex-start; }
   .msg .avatar { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; font-family: 'JetBrains Mono', monospace; font-size: 11px; display: grid; place-items: center; font-weight: 600; }
-  .msg.user .avatar { background: rgba(255,255,255,0.06); color: var(--ink); }
+  .msg.user .avatar { background: rgba(240,236,230,0.06); color: var(--ink); }
   .msg.bot .avatar { background: linear-gradient(135deg, var(--teal), var(--magenta)); color: var(--bg); }
   .msg .content { flex: 1; }
   .msg .content .meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-dim); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
@@ -236,7 +239,7 @@
   .replay-bar {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 14px 20px; border-top: 1px solid var(--line);
-    background: rgba(255,255,255,0.015);
+    background: rgba(240,236,230,0.015);
   }
   .replay-btn {
     background: linear-gradient(95deg, var(--teal), var(--magenta)); color: var(--bg); border: 0;
@@ -264,16 +267,16 @@
   }
   .json-box .j-head b { color: var(--magenta); font-weight: 500; }
   .json-box .j-head .ok { color: var(--teal); }
-  .json-box .k { color: #8ab4ff; }
-  .json-box .s { color: #ffb547; }
+  .json-box .k { color: #d6b98f; }
+  .json-box .s { color: #e3bd82; }
   .json-box .n { color: var(--teal); }
-  .json-box .b { color: #c084fc; }
+  .json-box .b { color: #dcb98a; }
   .json-box .p { color: var(--ink-dim); }
 
   .msg.tool .avatar { background: linear-gradient(135deg, var(--magenta), var(--gold)); color: var(--bg); }
-  .msg.system .avatar { background: rgba(255,255,255,0.05); color: var(--ink-dim); }
+  .msg.system .avatar { background: rgba(240,236,230,0.05); color: var(--ink-dim); }
   .msg.system .content .meta { color: var(--ink-dim); }
-  code.inline { background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; color: var(--teal); }
+  code.inline { background: rgba(240,236,230,0.06); padding: 1px 6px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; color: var(--teal); }
 
   /* ----------- CTA / footer ----------- */
   .footer-cta { padding: 120px 48px 60px; position: relative; z-index: 2; text-align: center; }
@@ -323,13 +326,13 @@
     <svg viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#2bd4d9"/><stop offset="1" stop-color="#6366f1"/>
+          <stop offset="0" stop-color="#c9a96e"/><stop offset="1" stop-color="#a87f4a"/>
         </linearGradient>
         <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#e94baf"/>
+          <stop offset="0" stop-color="#a87f4a"/><stop offset="1" stop-color="#c2703f"/>
         </linearGradient>
         <linearGradient id="g3" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#e94baf"/><stop offset="1" stop-color="#ffb547"/>
+          <stop offset="0" stop-color="#c2703f"/><stop offset="1" stop-color="#e3bd82"/>
         </linearGradient>
       </defs>
 
@@ -337,39 +340,39 @@
       <g transform="translate(60 60)">
         <rect x="0" y="0" width="280" height="46" rx="10" fill="url(#g1)" opacity="0.18"/>
         <rect x="0" y="0" width="280" height="46" rx="10" stroke="url(#g1)" stroke-width="1.5"/>
-        <text x="16" y="29" font-family="JetBrains Mono" font-size="13" fill="#2bd4d9" font-weight="600">AGENT  ·  Claude · GPT · Llama</text>
-        <circle cx="262" cy="23" r="4" fill="#2bd4d9"/>
+        <text x="16" y="29" font-family="JetBrains Mono" font-size="13" fill="#c9a96e" font-weight="600">AGENT  ·  Claude · GPT · Llama</text>
+        <circle cx="262" cy="23" r="4" fill="#c9a96e"/>
 
         <rect x="0" y="60" width="280" height="46" rx="10" fill="url(#g2)" opacity="0.18"/>
         <rect x="0" y="60" width="280" height="46" rx="10" stroke="url(#g2)" stroke-width="1.5"/>
-        <text x="16" y="89" font-family="JetBrains Mono" font-size="13" fill="#a78bfa" font-weight="600">MCP  ·  tools · auth · audit</text>
-        <circle cx="262" cy="83" r="4" fill="#a78bfa"/>
+        <text x="16" y="89" font-family="JetBrains Mono" font-size="13" fill="#c39a63" font-weight="600">MCP  ·  tools · auth · audit</text>
+        <circle cx="262" cy="83" r="4" fill="#c39a63"/>
 
         <rect x="0" y="120" width="280" height="46" rx="10" fill="url(#g2)" opacity="0.18"/>
         <rect x="0" y="120" width="280" height="46" rx="10" stroke="url(#g2)" stroke-width="1.5"/>
-        <text x="16" y="149" font-family="JetBrains Mono" font-size="13" fill="#c084fc" font-weight="600">AGENTCORE  ·  memory · traces</text>
-        <circle cx="262" cy="143" r="4" fill="#c084fc"/>
+        <text x="16" y="149" font-family="JetBrains Mono" font-size="13" fill="#dcb98a" font-weight="600">AGENTCORE  ·  memory · traces</text>
+        <circle cx="262" cy="143" r="4" fill="#dcb98a"/>
 
         <rect x="0" y="180" width="280" height="46" rx="10" fill="url(#g3)" opacity="0.18"/>
         <rect x="0" y="180" width="280" height="46" rx="10" stroke="url(#g3)" stroke-width="1.5"/>
-        <text x="16" y="209" font-family="JetBrains Mono" font-size="13" fill="#e94baf" font-weight="600">BEDROCK  ·  guardrails · VPC</text>
-        <circle cx="262" cy="203" r="4" fill="#e94baf"/>
+        <text x="16" y="209" font-family="JetBrains Mono" font-size="13" fill="#c2703f" font-weight="600">BEDROCK  ·  guardrails · VPC</text>
+        <circle cx="262" cy="203" r="4" fill="#c2703f"/>
 
         <rect x="0" y="240" width="280" height="46" rx="10" fill="url(#g3)" opacity="0.18"/>
         <rect x="0" y="240" width="280" height="46" rx="10" stroke="url(#g3)" stroke-width="1.5"/>
-        <text x="16" y="269" font-family="JetBrains Mono" font-size="13" fill="#ffb547" font-weight="600">VECTOR  ·  OpenSearch · pgvector</text>
-        <circle cx="262" cy="263" r="4" fill="#ffb547"/>
+        <text x="16" y="269" font-family="JetBrains Mono" font-size="13" fill="#e3bd82" font-weight="600">VECTOR  ·  OpenSearch · pgvector</text>
+        <circle cx="262" cy="263" r="4" fill="#e3bd82"/>
 
         <!-- connectors -->
-        <path d="M40 46 L40 60 M120 46 L120 60 M200 46 L200 60" stroke="#2bd4d9" stroke-width="1" opacity="0.4" stroke-dasharray="2 3"/>
-        <path d="M40 106 L40 120 M120 106 L120 120 M200 106 L200 120" stroke="#a78bfa" stroke-width="1" opacity="0.4" stroke-dasharray="2 3"/>
-        <path d="M40 166 L40 180 M120 166 L120 180 M200 166 L200 180" stroke="#c084fc" stroke-width="1" opacity="0.4" stroke-dasharray="2 3"/>
-        <path d="M40 226 L40 240 M120 226 L120 240 M200 226 L200 240" stroke="#e94baf" stroke-width="1" opacity="0.4" stroke-dasharray="2 3"/>
+        <path d="M40 46 L40 60 M120 46 L120 60 M200 46 L200 60" stroke="#c9a96e" stroke-width="1" opacity="0.4" stroke-dasharray="2 3"/>
+        <path d="M40 106 L40 120 M120 106 L120 120 M200 106 L200 120" stroke="#c39a63" stroke-width="1" opacity="0.4" stroke-dasharray="2 3"/>
+        <path d="M40 166 L40 180 M120 166 L120 180 M200 166 L200 180" stroke="#dcb98a" stroke-width="1" opacity="0.4" stroke-dasharray="2 3"/>
+        <path d="M40 226 L40 240 M120 226 L120 240 M200 226 L200 240" stroke="#c2703f" stroke-width="1" opacity="0.4" stroke-dasharray="2 3"/>
       </g>
 
       <!-- AWS rail bottom -->
       <g transform="translate(60 360)">
-        <text x="0" y="0" font-family="JetBrains Mono" font-size="11" fill="#8a8da1" letter-spacing="0.1em">// AWS · eu-north-1 · stockholm</text>
+        <text x="0" y="0" font-family="JetBrains Mono" font-size="11" fill="#8a8480" letter-spacing="0.1em">// AWS · eu-north-1 · stockholm</text>
       </g>
     </svg>
   </div>
