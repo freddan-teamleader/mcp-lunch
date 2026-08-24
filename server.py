@@ -35,7 +35,6 @@ from urllib.parse import parse_qs
 import httpx
 from bs4 import BeautifulSoup
 from mcp.server.fastmcp import FastMCP
-from mcp.server.transport_security import TransportSecuritySettings
 
 # ---------------------------------------------------------------------------
 # MCP app
@@ -59,9 +58,6 @@ mcp = FastMCP(
     stateless_http=True,
     # DNS-rebinding protection is disabled here because we sit behind
     # Railway's TLS-terminating proxy, which already enforces origin security.
-    transport_security=TransportSecuritySettings(
-        enable_dns_rebinding_protection=False,
-    ),
 )
 
 BASE_URL = "https://www.matochmat.se"
