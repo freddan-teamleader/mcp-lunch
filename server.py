@@ -36,6 +36,7 @@ from urllib.parse import parse_qs
 import httpx
 from bs4 import BeautifulSoup, NavigableString, Tag
 from mcp.server import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 
 # ---------------------------------------------------------------------------
 # MCP app
@@ -2042,6 +2043,26 @@ if __name__ == "__main__":
         import uvicorn
 
         port = int(os.environ.get("PORT", "8000"))
-        mcp_app = mcp.streamable_http_app(streamable_http_path=MCP_PATH, stateless_http=True)
+        # DNS-rebinding protection defaults to localhost-only, which rejects the
+        # proxied Host header on Railway with 421. Allow the public hostnames.
+        allowed = [h.strip() for h in os.environ.get("MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
+        if not allowed:
+            allowed = ["teamleader.se", "www.teamleader.se"]
+            railway_host = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+            if railway_host:
+                allowed.append(railway_host)
+            # The Host header carries the port, so local dev needs both forms.
+            for local in ("localhost", "127.0.0.1"):
+                allowed += [local, f"{local}:{port}"]
+
+        security = TransportSecuritySettings(
+            allowed_hosts=allowed,
+            allowed_origins=[f"https://{h}" for h in allowed] + [f"http://{h}" for h in allowed],
+        )
+        mcp_app = mcp.streamable_http_app(
+            streamable_http_path=MCP_PATH,
+            stateless_http=True,
+            transport_security=security,
+        )
         app = ImageProxyMiddleware(mcp_app)
         uvicorn.run(app, host="0.0.0.0", port=port)  # noqa: S104  # nosec B104 — Railway requires binding all interfaces
