@@ -50,14 +50,6 @@ mcp = MCPServer(
         "visual cards — one card per restaurant — displaying name, dishes and prices. "
         "Use show_widget or a grid/card layout rather than plain text lists."
     ),
-    # Mount directly on /lunchguide so no path rewriting is needed.
-    streamable_http_path="/lunchguide",
-    # Stateless mode: every POST is self-contained — no session state needed.
-    # This prevents 404s when a session is lost due to Railway restarts or
-    # load-balancer connection rotation.
-    stateless_http=True,
-    # DNS-rebinding protection is disabled here because we sit behind
-    # Railway's TLS-terminating proxy, which already enforces origin security.
 )
 
 BASE_URL = "https://www.matochmat.se"
@@ -1992,6 +1984,6 @@ if __name__ == "__main__":
         import uvicorn
 
         port = int(os.environ.get("PORT", "8000"))
-        mcp_app = mcp.streamable_http_app()
+        mcp_app = mcp.streamable_http_app(streamable_http_path="/lunchguide", stateless_http=True)
         app = ImageProxyMiddleware(mcp_app)
         uvicorn.run(app, host="0.0.0.0", port=port)  # noqa: S104  # nosec B104 — Railway requires binding all interfaces
