@@ -34,13 +34,13 @@ from urllib.parse import parse_qs
 
 import httpx
 from bs4 import BeautifulSoup
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 
 # ---------------------------------------------------------------------------
 # MCP app
 # ---------------------------------------------------------------------------
 
-mcp = FastMCP(
+mcp = MCPServer(
     name="lunch-guide",
     instructions=(
         "Use this server to look up Swedish restaurant lunch menus. "
