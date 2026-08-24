@@ -30,10 +30,11 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import cast
 from urllib.parse import parse_qs
 
 import httpx
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString, Tag
 from mcp.server import MCPServer
 
 # ---------------------------------------------------------------------------
@@ -194,6 +195,7 @@ def _preprocess_dish_lines(lines: list[str], restaurant_name: str) -> list[str]:
     """
     Clean up raw text lines before dish parsing:
     - Drop navigation fragments that the site splits across spans
+    - Drop aggregator promo lines that name the source (source policy)
     - Drop the restaurant name itself (appears as a text anchor after the logo)
     - Join split price tokens: "139" + "kr" → "139 kr"
     """
@@ -209,6 +211,17 @@ def _preprocess_dish_lines(lines: list[str], restaurant_name: str) -> list[str]:
             "visa fler",
         }
     )
+    # Promo / cross-sell lines the aggregator mixes into the dish list. They name
+    # the source in plain text, which the source policy forbids from reaching end
+    # users (see _strip_source_fields), so drop them before parsing.
+    PROMO = (
+        "mat och mat",
+        "matochmat",
+        "mylunch",
+        "saknar du någon restaurang",
+        "närliggande restauranger",
+        "tipsade oss om restauranger",
+    )
     name_lower = restaurant_name.lower()
     result: list[str] = []
     i = 0
@@ -218,6 +231,11 @@ def _preprocess_dish_lines(lines: list[str], restaurant_name: str) -> list[str]:
 
         # Skip navigation fragments and the restaurant name itself
         if curr_lower in NAV or curr_lower == name_lower:
+            i += 1
+            continue
+
+        # Skip promo lines that would expose the data source
+        if any(promo in curr_lower for promo in PROMO):
             i += 1
             continue
 
@@ -258,13 +276,15 @@ def _parse_lunch_page(html: str) -> list[dict]:
     slug_to_href: dict[str, str] = {}
     slug_to_logo: dict[str, str] = {}
     for a in soup.find_all("a", href=re.compile(r"^/lunch/[^/]+/[^/]+/?$")):
+        if not isinstance(a, Tag):
+            continue
         img = a.find("img")
         href = str(a.get("href") or "")
         parts = [p for p in href.strip("/").split("/") if p]
         if len(parts) != 3:
             continue
         slug = parts[2]
-        if img:
+        if isinstance(img, Tag):
             alt = str(img.get("alt") or "")
             if "veckansluncher" in alt.lower():
                 continue
@@ -278,7 +298,9 @@ def _parse_lunch_page(html: str) -> list[dict]:
 
     # ── 2. Inline img alt text for get_text() section detection ─────────
     for img in soup.find_all("img"):
-        img.replace_with(str(img.get("alt") or ""))
+        if not isinstance(img, Tag):
+            continue
+        img.replace_with(NavigableString(str(img.get("alt") or "")))
 
     # Infer city slug from any collected href
     city_slug = ""
@@ -603,12 +625,14 @@ def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
     seen_names: set[str] = set()
 
     for mi in soup.find_all("div", class_="mi"):
+        if not isinstance(mi, Tag):
+            continue
         # Name and URL
         mih = mi.find("div", class_="mih")
-        if not mih:
+        if not isinstance(mih, Tag):
             continue
         h2 = mih.find("h2")
-        if not h2:
+        if not isinstance(h2, Tag):
             continue
         name = h2.get_text(strip=True)
         if not name or name.lower() in seen_names:
@@ -618,16 +642,18 @@ def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
         # Logo
         miib = mi.find("div", class_="miib")
         logo_url = ""
-        if miib:
+        if isinstance(miib, Tag):
             img = miib.find("img")
-            if img:
+            if isinstance(img, Tag):
                 logo_url = str(img.get("src") or "")
 
         # Dishes from mim-row — only rows with p.mim-txt (not mim-txt0) are real dishes
         dishes = []
         for row in mi.find_all("div", class_="mim-row"):
+            if not isinstance(row, Tag):
+                continue
             txt_el = row.find("p", class_="mim-txt")
-            if not txt_el:
+            if not isinstance(txt_el, Tag):
                 continue  # skip headers (mim-txt0)
             dish_name = txt_el.get_text(strip=True)
             if not dish_name or len(dish_name) > 250:
@@ -636,7 +662,7 @@ def _parse_mylunch_page(html: str, city_slug: str) -> list[dict]:
             # Price from sibling p.mim-prc
             prc_el = row.find("p", class_="mim-prc")
             price = None
-            if prc_el:
+            if isinstance(prc_el, Tag):
                 pm = price_re.search(prc_el.get_text())
                 if pm:
                     price = int(pm.group(1))
@@ -722,8 +748,10 @@ def _parse_mylunch_restaurant_today(html: str, slug: str, city_slug: str) -> dic
     # Restaurant-level price (used when per-dish price is missing)
     rest_price: int | None = None
     for price_el in soup.find_all("div", class_="midp"):
+        if not isinstance(price_el, Tag):
+            continue
         p = price_el.find("p")
-        if p:
+        if isinstance(p, Tag):
             pm = re.search(r"(\d{2,4})", p.get_text())
             if pm:
                 rest_price = int(pm.group(1))
@@ -731,7 +759,7 @@ def _parse_mylunch_restaurant_today(html: str, slug: str, city_slug: str) -> dic
 
     # Logo
     img = soup.find("img", class_="miibm")
-    logo_url = img.get("src", "") if img else ""
+    logo_url = str(img.get("src", "")) if isinstance(img, Tag) else ""
 
     _SKIP_HEADER = re.compile(
         r"^\*+[\s*]+$|nybakat|kaffe ingår|sallad ingår|bröd ingår"
@@ -770,14 +798,14 @@ def _parse_mylunch_restaurant_today(html: str, slug: str, city_slug: str) -> dic
             )
         return dishes_out
 
-    all_mims = soup.find_all("div", class_="mim")
+    all_mims = [mim for mim in soup.find_all("div", class_="mim") if isinstance(mim, Tag)]
     today = _today_sv()
 
     # Strategy 1: find today's day-specific section
     today_mim = None
     for mim in all_mims:
         first_row = mim.find("div", class_="mim-row")
-        if first_row and today in first_row.get_text("", strip=True).lower():
+        if isinstance(first_row, Tag) and today in first_row.get_text("", strip=True).lower():
             today_mim = mim
             break
 
@@ -1380,7 +1408,7 @@ def get_lunch_guide(city: str) -> str:
     cached = _cache_get(cache_key)
     if cached is not None:
         # Cache holds the full data (logos etc. need it); strip sources on the way out.
-        return json.dumps(_strip_source_fields(cached), ensure_ascii=False)
+        return json.dumps(_strip_source_fields(cast(list[dict], cached)), ensure_ascii=False)
 
     # Fetch matochmat
     matochmat: list[dict] = []
@@ -1716,7 +1744,7 @@ def get_restaurant_menu(city: str, restaurant: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Static landing  +  image proxy  +  /lunchguide alias
+# Static landing  +  image proxy  +  legacy MCP path redirect
 # ---------------------------------------------------------------------------
 #
 # Pure ASGI middleware in front of the MCP app. Does NOT buffer the MCP
@@ -1746,17 +1774,28 @@ def _run_price_check_background() -> None:
         _notify_slack(f":x: *mcp-lunch*: Priskoll kraschade: {e}")
 
 
+# The MCP endpoint. Kept on its own path so /lunchguide can serve the web UI on
+# every method instead of only on GET.
+MCP_PATH = "/lunchguide/mcp"
+
+# Path the MCP endpoint used to live on. POSTs there are redirected to MCP_PATH
+# so clients configured before the split keep working.
+LEGACY_MCP_PATHS = ("/lunchguide", "/lunchguide/")
+
 # Routes handled here (everything else falls through to MCP):
-#   GET /                         → site/index.html       (Aurora landing)
-#   GET /canvas.html              → site/canvas.html      (3-variant review)
-#   GET /design-canvas.jsx        → site/design-canvas.jsx
-#   GET /variants/<name>.html     → site/variants/<name>.html
-#   GET /image-proxy?path=/...    → proxies restaurant logo images
-#   *   /lunchguide(/*)           → rewritten to /mcp(/*)
+#   GET  /                         → site/index.html       (Aurora landing)
+#   GET  /canvas.html              → site/canvas.html      (3-variant review)
+#   GET  /design-canvas.jsx        → site/design-canvas.jsx
+#   GET  /variants/<name>.html     → site/variants/<name>.html
+#   GET  /lunchguide               → site/lunchguide.html  (web UI)
+#   GET  /lunchguide/image-proxy   → proxies restaurant logo images
+#   POST /lunchguide/run-price-check → Slack-triggered price check
+#   POST /lunchguide               → 307 → /lunchguide/mcp (legacy MCP clients)
+#   *    /lunchguide/mcp           → falls through to the MCP app
 
 
 class ImageProxyMiddleware:
-    """ASGI middleware: static landing files, image proxy, /lunchguide alias."""
+    """ASGI middleware: static landing files, image proxy, legacy MCP redirect."""
 
     _STATIC_DIR = (Path(__file__).parent / "site").resolve()
 
@@ -1882,6 +1921,23 @@ class ImageProxyMiddleware:
                     await send({"type": "http.response.body", "body": self._FALLBACK})
                     return
 
+        # ── Legacy MCP path ─────────────────────────────────────────────────
+        # The MCP endpoint moved to /lunchguide/mcp when /lunchguide became the
+        # web UI. 307 preserves the method and body, so old clients still work.
+        if req_path in LEGACY_MCP_PATHS and method not in ("GET", "HEAD"):
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 307,
+                    "headers": [
+                        [b"location", MCP_PATH.encode()],
+                        [b"content-length", b"0"],
+                    ],
+                }
+            )
+            await send({"type": "http.response.body", "body": b""})
+            return
+
         # ── Slack-triggered price check ──────────────────────────────────────
         if req_path == "/lunchguide/run-price-check" and scope["method"] == "POST":
             body_parts = []
@@ -1905,7 +1961,7 @@ class ImageProxyMiddleware:
                     return
 
             # Respond immediately to Slack (must reply within 3 s)
-            ack = ":hourglass: Startar priskoll\u2026".encode("utf-8")
+            ack = ":hourglass: Startar priskoll\u2026".encode()
             await send(
                 {
                     "type": "http.response.start",
@@ -1986,6 +2042,6 @@ if __name__ == "__main__":
         import uvicorn
 
         port = int(os.environ.get("PORT", "8000"))
-        mcp_app = mcp.streamable_http_app(streamable_http_path="/lunchguide", stateless_http=True)
+        mcp_app = mcp.streamable_http_app(streamable_http_path=MCP_PATH, stateless_http=True)
         app = ImageProxyMiddleware(mcp_app)
         uvicorn.run(app, host="0.0.0.0", port=port)  # noqa: S104  # nosec B104 — Railway requires binding all interfaces

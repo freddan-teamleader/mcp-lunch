@@ -35,7 +35,12 @@ batch job for historical price snapshots.
 
 `MCP_TRANSPORT` controls transport: `sse` (default, hosted) or `stdio` (local
 Claude Desktop / Claude Code). HTTP server runs via uvicorn wrapped in
-`ImageProxyMiddleware` (static landing at `/`, image proxy, `/lunchguide` alias).
+`ImageProxyMiddleware` (static landing at `/`, image proxy, legacy MCP redirect).
+
+**HTTP paths:** `GET /lunchguide` serves the web UI (`site/lunchguide.html`); the
+MCP endpoint itself lives at **`/lunchguide/mcp`** (`MCP_PATH` in `server.py`).
+Non-GET requests to the old `/lunchguide` path get a 307 to `/lunchguide/mcp`
+so clients configured before the split keep working.
 
 ## Data sources
 
